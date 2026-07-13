@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-O POOLSTRUCT deve produzir resultados reproduziveis e explicaveis para o pre-dimensionamento de piscinas de concreto armado. Cada resultado numerico precisa informar entradas, unidade, equacao e origem tecnica.
+O POOLSTRUCT deve produzir resultados reproduziveis e explicaveis para o pre-dimensionamento de piscinas com paredes em alvenaria estrutural e laje de fundo em concreto armado. Cada resultado numerico precisa informar entradas, unidade, equacao e origem tecnica.
 
 ## Principios
 
@@ -27,4 +27,3 @@ O POOLSTRUCT deve produzir resultados reproduziveis e explicaveis para o pre-dim
 3. O motor cria casos de carga e executa verificacoes disponiveis.
 4. A interface exibe resultados, hipoteses, alertas e rastreabilidade.
 5. Uma revisao imutavel do calculo pode ser persistida e exportada.
-

@@ -40,7 +40,44 @@ export interface CalculationError {
   readonly message: string;
 }
 
+export interface WallPanelInput {
+  readonly panelLengthMm: number;
+  readonly panelHeightMm: number;
+  readonly wallThicknessMm: number;
+  readonly saturatedSoilUnitWeightKNM3: number;
+  readonly soilFrictionAngleDegrees: number;
+  readonly effectiveHeightFactor: number;
+  readonly ultimateLoadFactor: number;
+  readonly orthogonalityCoefficient: number;
+}
+
+export interface WallPanelResult {
+  readonly activeEarthPressureCoefficient: number;
+  readonly maximumSoilPressureKPa: number;
+  readonly maximumWaterPressureKPa: number;
+  readonly governingCase: "FULL_POOL_WATER" | "EMPTY_POOL_SATURATED_SOIL";
+  readonly governingMaximumPressureKPa: number;
+  readonly governingAveragePressureKPa: number;
+  readonly effectiveHeightM: number;
+  readonly slendernessRatio: number;
+  readonly heightToLengthRatio: number;
+  readonly momentCoefficient: number;
+  readonly designMomentParallelKNMPerM: number;
+  readonly designMomentPerpendicularKNMPerM: number;
+  readonly trace: readonly TraceStep[];
+  readonly warnings: readonly string[];
+}
+
+export interface WallPanelError {
+  readonly field: keyof WallPanelInput | "profile" | "heightToLengthRatio";
+  readonly code: "NOT_FINITE" | "OUT_OF_RANGE" | "INVALID_PROFILE" | "UNSUPPORTED_RATIO";
+  readonly message: string;
+}
+
+export type WallPanelOutcome =
+  | { readonly ok: true; readonly value: WallPanelResult }
+  | { readonly ok: false; readonly errors: readonly WallPanelError[] };
+
 export type CalculationOutcome =
   | { readonly ok: true; readonly value: HydrostaticResult }
   | { readonly ok: false; readonly errors: readonly CalculationError[] };
-

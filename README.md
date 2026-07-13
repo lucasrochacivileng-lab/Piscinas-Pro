@@ -1,8 +1,8 @@
 # POOLSTRUCT
 
-POOLSTRUCT e uma base de software para pre-dimensionamento e verificacao rastreavel de piscinas em concreto armado. O objetivo e transformar entradas geometricas, materiais e perfis normativos versionados em memorias de calculo auditaveis.
+POOLSTRUCT e uma base de software para pre-dimensionamento e verificacao rastreavel de piscinas com paredes em alvenaria estrutural e laje de fundo em concreto armado. O objetivo e transformar entradas geometricas, materiais e perfis tecnicos versionados em memorias de calculo auditaveis.
 
-> Estado: Fase 1 iniciada. O nucleo atual calcula apenas a acao hidrostatica da agua e grandezas geometricas. Ele nao dimensiona armaduras nem substitui a responsabilidade tecnica de um engenheiro.
+> Estado: Fase 1 iniciada. O nucleo atual calcula a acao hidrostatica, o empuxo ativo simplificado do solo e momentos solicitantes de paineis dentro do dominio coberto pela fonte academica. Ele nao dimensiona armaduras nem substitui a responsabilidade tecnica de um engenheiro.
 
 ## Requisitos
 
@@ -37,7 +37,7 @@ O script copia apenas os arquivos versionados para `%LOCALAPPDATA%\poolstruct\ve
 
 ## Limites atuais
 
-- nenhuma verificacao de ELU ou ELS;
+- o fator de majoracao pode ser aplicado aos momentos, mas ainda nao existe uma verificacao completa de ELU ou ELS;
 - nenhuma armadura e calculada;
-- empuxo de solo, lencol freatico, sismo, temperatura e recalque ainda nao fazem parte do motor;
+- lencol freatico, sismo, temperatura e recalque ainda nao fazem parte do motor;
 - coeficientes normativos permanecem bloqueados ate a incorporacao das fontes tecnicas autorizadas.

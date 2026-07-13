@@ -9,9 +9,9 @@
 
 - unidades e validacao;
 - geometria e carga hidrostatica;
-- empuxo de solo, subpressao e peso proprio;
+- empuxo de solo (implementado), subpressao e peso proprio;
 - perfis normativos versionados;
-- verificacoes estruturais e golden tests.
+- golden test academico de paineis (implementado) e verificacoes estruturais completas;
 
 ## Fase 2 - Produto
 
@@ -24,4 +24,3 @@
 - auditoria tecnica externa;
 - suites de regressao ampliadas;
 - observabilidade, backup e recuperacao.
-
