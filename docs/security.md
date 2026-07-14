@@ -19,3 +19,13 @@
 - funcoes de trigger privadas sem permissao de execucao direta;
 - auditoria de mutacoes e hash SHA-256 das entradas;
 - escape de dados do projeto na memoria HTML exportada.
+
+## Controles adicionados na Fase 3
+
+- mensagens internas de excecao nao sao apresentadas ao usuario nem persistidas;
+- cada falha recebe UUID de correlacao para suporte;
+- eventos remotos aceitam apenas tipos e codigos controlados, contexto JSON de ate 4 KiB e propriedade por `auth.uid()`;
+- eventos nao podem ser alterados ou excluidos pelo cliente;
+- o buffer local guarda no maximo 50 eventos e nunca armazena entradas estruturais;
+- dumps ficam ignorados pelo Git e recebem manifesto SHA-256;
+- restore exige confirmacao explicita de banco isolado e usa transacao com `ON_ERROR_STOP`.

@@ -9,4 +9,6 @@
 
 Cada correcao de calculo deve incluir um teste de regressao que falhe na versao anterior.
 
-Na conclusao da Fase 2, a suite cobre 36 testes em 11 arquivos: os 27 testes do motor, contrato estatico da migration/RLS e geracao segura da memoria de calculo. A verificacao de entrega inclui TypeScript, build Vite e um fluxo real no navegador para criar projeto, calcular e confirmar a primeira revisao.
+Na implementacao da Fase 3, a suite cobre regressao integrada, golden case residencial, determinismo, monotonicidade hidrostatica, matriz operacional sem valores nao finitos, observabilidade sem vazamento de mensagens brutas e contratos das duas migrations. A verificacao de entrega inclui TypeScript, build Vite, parse dos scripts PowerShell e fluxo real no navegador.
+
+Os testes pgTAP em `supabase/tests` devem ser executados com `npx supabase test db` em uma stack local ativa ou projeto de teste vinculado. Esse gate exige Docker ou credenciais de um banco descartavel.

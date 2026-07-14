@@ -2,7 +2,7 @@
 
 POOLSTRUCT e uma base de software para pre-dimensionamento e verificacao rastreavel de piscinas com paredes em alvenaria estrutural e laje de fundo em concreto armado. O objetivo e transformar entradas geometricas, materiais e perfis tecnicos versionados em memorias de calculo auditaveis.
 
-> Estado: Fase 2 concluida na versao `0.3.0`. A aplicacao web integra o nucleo academico de calculo a projetos, autenticacao opcional via Supabase, revisoes imutaveis e memoria de calculo exportavel. Os resultados nao substituem a responsabilidade tecnica de um engenheiro.
+> Estado: implementacao da Fase 3 concluida na versao `0.4.0`. O produto inclui regressao ampliada, observabilidade sanitizada, backup verificavel e procedimento de recuperacao. A liberacao profissional continua bloqueada ate auditoria e assinatura de engenheiro independente.
 
 ## Requisitos
 
@@ -56,6 +56,18 @@ Somente a chave publica deve ser exposta no cliente. As politicas RLS vinculam p
 - revisoes imutaveis, hash SHA-256 das entradas e auditoria;
 - memoria de calculo HTML autocontida e pronta para impressao;
 - layout responsivo para desktop e dispositivos moveis.
+
+## Confiabilidade da Fase 3
+
+- matriz de regressao, golden case e invariantes fisicos;
+- incidentes com UUID de correlacao, buffer local limitado e persistencia Supabase por proprietario;
+- error boundary global e mensagens sem exposicao de erros internos;
+- backup logico separado em papeis, schema e dados, acompanhado de manifesto SHA-256;
+- restore drill transacional permitido apenas em banco isolado;
+- runbooks de observabilidade, incidente, backup e recuperacao;
+- pacote de auditoria independente com gates para liberacao profissional.
+
+Consulte `docs/operations-runbook.md` antes de executar backup ou restauracao. O backup remoto exige um projeto Supabase vinculado ou `POOLSTRUCT_DATABASE_URL`; a restauracao exige `psql` e um banco vazio descartavel.
 
 ## Capacidades da Fase 1
 

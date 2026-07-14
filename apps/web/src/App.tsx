@@ -8,7 +8,13 @@ import { ResultDashboard } from "./components/ResultDashboard";
 import { RevisionHistory } from "./components/RevisionHistory";
 import { DEFAULT_DESIGN_INPUT } from "./lib/defaults";
 import type { NewProject, ProjectRecord, RevisionRecord } from "./lib/models";
+import { reportOperationalError, type OperationalEventType } from "./lib/observability";
 import { createProjectRepository } from "./lib/repository";
+
+interface ErrorNotice {
+  readonly message: string;
+  readonly correlationId: string;
+}
 
 export function App() {
   const { user, loading, localMode, signOut } = useAuth();
@@ -19,7 +25,20 @@ export function App() {
   const [editorInput, setEditorInput] = useState<Phase1DesignInput>(DEFAULT_DESIGN_INPUT);
   const [result, setResult] = useState<Phase1DesignResult | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<ErrorNotice | null>(null);
+
+  const handleFailure = useCallback(async (
+    eventType: OperationalEventType,
+    messageCode: string,
+    reason: unknown,
+    fallback: string
+  ) => {
+    const incident = await reportOperationalError(eventType, messageCode, reason, user?.id);
+    setError({
+      message: fallback,
+      correlationId: incident.correlationId
+    });
+  }, [user?.id]);
 
   const refreshProjects = useCallback(async () => {
     if (!repository) return;
@@ -28,18 +47,22 @@ export function App() {
   }, [repository]);
 
   useEffect(() => {
-    void refreshProjects().catch((reason) => setError(reason instanceof Error ? reason.message : "Falha ao carregar projetos."));
-  }, [refreshProjects]);
+    void refreshProjects().catch((reason) => handleFailure("repository_error", "project_list_failed", reason, "Falha ao carregar projetos."));
+  }, [handleFailure, refreshProjects]);
 
   async function selectProject(project: ProjectRecord) {
     if (!repository) return;
     setActiveProject(project);
-    setError("");
-    const records = await repository.listRevisions(project.id);
-    setRevisions(records);
-    const latest = records[0];
-    setEditorInput(latest?.input ?? DEFAULT_DESIGN_INPUT);
-    setResult(latest?.result ?? null);
+    setError(null);
+    try {
+      const records = await repository.listRevisions(project.id);
+      setRevisions(records);
+      const latest = records[0];
+      setEditorInput(latest?.input ?? DEFAULT_DESIGN_INPUT);
+      setResult(latest?.result ?? null);
+    } catch (reason) {
+      await handleFailure("repository_error", "revision_list_failed", reason, "Falha ao carregar revisões.");
+    }
   }
 
   async function createProject(project: NewProject) {
@@ -49,25 +72,29 @@ export function App() {
       await refreshProjects();
       await selectProject(record);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Falha ao criar projeto.");
+      await handleFailure("repository_error", "project_create_failed", reason, "Falha ao criar projeto.");
     }
   }
 
   async function archiveProject(projectId: string) {
     if (!repository) return;
-    await repository.archiveProject(projectId);
-    if (activeProject?.id === projectId) {
-      setActiveProject(null);
-      setRevisions([]);
-      setResult(null);
+    try {
+      await repository.archiveProject(projectId);
+      if (activeProject?.id === projectId) {
+        setActiveProject(null);
+        setRevisions([]);
+        setResult(null);
+      }
+      await refreshProjects();
+    } catch (reason) {
+      await handleFailure("repository_error", "project_archive_failed", reason, "Falha ao arquivar projeto.");
     }
-    await refreshProjects();
   }
 
   async function calculate(input: Phase1DesignInput) {
     if (!repository || !activeProject) return;
     setBusy(true);
-    setError("");
+    setError(null);
     try {
       const calculation = runPhase1Design(input, SILVA_2022_PHASE1_PROFILE);
       const revision = await repository.saveRevision(activeProject.id, input, calculation);
@@ -77,7 +104,7 @@ export function App() {
       setRevisions((current) => [revision, ...current]);
       await refreshProjects();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Não foi possível executar o cálculo.");
+      await handleFailure("calculation_error", "calculation_or_save_failed", reason, "Não foi possível executar o cálculo.");
     } finally {
       setBusy(false);
     }
@@ -100,8 +127,8 @@ export function App() {
     <div className="workspace">
       <ProjectSidebar projects={projects} activeProjectId={activeProject?.id ?? null} onSelect={(project) => void selectProject(project)} onCreate={createProject} onArchive={archiveProject} />
       <main className="main-content">
-        {error && <div className="error-banner" role="alert">{error}</div>}
-        {!activeProject ? <section className="welcome-card"><p className="eyebrow">Fase 2 concluída</p><h1>Do modelo estrutural à memória de cálculo.</h1><p>Crie um projeto para dimensionar paredes e laje, registrar revisões imutáveis e emitir um relatório rastreável.</p><div className="welcome-features"><span>Motor determinístico</span><span>Histórico com SHA-256</span><span>RLS por proprietário</span></div></section> : <>
+        {error && <div className="error-banner" role="alert"><strong>{error.message}</strong><small>Código do incidente: {error.correlationId}</small></div>}
+        {!activeProject ? <section className="welcome-card"><p className="eyebrow">Fase 3 · confiabilidade operacional</p><h1>Do modelo estrutural à memória de cálculo.</h1><p>Crie um projeto para dimensionar paredes e laje, registrar revisões imutáveis e emitir um relatório rastreável.</p><div className="welcome-features"><span>Motor determinístico</span><span>Histórico com SHA-256</span><span>Incidentes correlacionados</span></div></section> : <>
           <section className="project-header"><div><p className="eyebrow">Projeto ativo</p><h1>{activeProject.name}</h1><p>{activeProject.location || "Local não informado"}</p></div><span className="project-state">{activeProject.status === "calculated" ? "Calculado" : "Rascunho"}</span></section>
           <div className="content-grid"><div className="primary-column"><CalculationEditor initialInput={editorInput} busy={busy} onCalculate={calculate} />{result && <ResultDashboard result={result} />}</div><RevisionHistory project={activeProject} revisions={revisions} onOpen={openRevision} /></div>
         </>}

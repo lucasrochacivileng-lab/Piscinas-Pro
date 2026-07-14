@@ -83,6 +83,30 @@ export interface Database {
         Update: never;
         Relationships: [];
       };
+      operational_events: {
+        Row: {
+          id: string;
+          owner_id: string;
+          correlation_id: string;
+          event_type: "ui_error" | "repository_error" | "calculation_error" | "recovery_drill";
+          severity: "warning" | "error";
+          message_code: string;
+          context: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          correlation_id: string;
+          event_type: "ui_error" | "repository_error" | "calculation_error" | "recovery_drill";
+          severity: "warning" | "error";
+          message_code: string;
+          context?: Json;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

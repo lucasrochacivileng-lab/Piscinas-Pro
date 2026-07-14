@@ -39,6 +39,16 @@ A aplicacao da migration em ambiente remoto depende das credenciais do projeto S
 
 ## Fase 3 - Confiabilidade
 
-- auditoria tecnica externa;
-- suites de regressao ampliadas;
-- observabilidade, backup e recuperacao.
+Status da implementacao: concluida em 13/07/2026 na versao `0.4.0`.
+
+- [x] pacote e checklist para auditoria tecnica independente;
+- [x] suites de regressao, golden cases e invariantes ampliadas;
+- [x] observabilidade sanitizada com correlacao de incidentes;
+- [x] schema operacional protegido por RLS;
+- [x] backup logico com manifesto e SHA-256;
+- [x] restore drill transacional e verificacao pos-recuperacao;
+- [x] runbooks de operacao e resposta a incidentes;
+- [ ] parecer assinado por engenheiro independente;
+- [ ] drill executado contra projeto Supabase isolado.
+
+Os dois itens finais sao gates externos: dependem, respectivamente, de um profissional independente e de credenciais/infraestrutura Supabase. Eles nao bloqueiam a conclusao da implementacao de software, mas bloqueiam a liberacao profissional.
