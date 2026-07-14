@@ -52,6 +52,7 @@ export interface WallPanelInput {
 }
 
 export interface WallPanelResult {
+  readonly analysisMethod: "TWO_WAY_TABLE" | "VERTICAL_CANTILEVER";
   readonly activeEarthPressureCoefficient: number;
   readonly maximumSoilPressureKPa: number;
   readonly maximumWaterPressureKPa: number;

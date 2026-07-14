@@ -9,3 +9,4 @@
 
 Cada correcao de calculo deve incluir um teste de regressao que falhe na versao anterior.
 
+Na conclusao da Fase 1, a suite cobre 27 testes em 9 arquivos: primitivas de engenharia, hidrostatica, solo, paineis, cargas globais, alvenaria, laje, quantitativos e fluxo integrado.

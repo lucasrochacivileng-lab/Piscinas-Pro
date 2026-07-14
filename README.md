@@ -2,7 +2,7 @@
 
 POOLSTRUCT e uma base de software para pre-dimensionamento e verificacao rastreavel de piscinas com paredes em alvenaria estrutural e laje de fundo em concreto armado. O objetivo e transformar entradas geometricas, materiais e perfis tecnicos versionados em memorias de calculo auditaveis.
 
-> Estado: Fase 1 iniciada. O nucleo atual calcula a acao hidrostatica, o empuxo ativo simplificado do solo e momentos solicitantes de paineis dentro do dominio coberto pela fonte academica. Ele nao dimensiona armaduras nem substitui a responsabilidade tecnica de um engenheiro.
+> Estado: Fase 1 concluida no escopo academico. O nucleo v0.2.0 executa cargas, paredes, laje, armaduras e quantitativos com rastreabilidade. Perfis academicos retornam `REQUIRES_REVIEW` e nao substituem a responsabilidade tecnica de um engenheiro.
 
 ## Requisitos
 
@@ -35,9 +35,23 @@ O script copia apenas os arquivos versionados para `%LOCALAPPDATA%\poolstruct\ve
 - `src`: reservado para a aplicacao web
 - `supabase`: reservado para migrations e configuracao local
 
-## Limites atuais
+## Capacidades da Fase 1
 
-- o fator de majoracao pode ser aplicado aos momentos, mas ainda nao existe uma verificacao completa de ELU ou ELS;
-- nenhuma armadura e calculada;
-- lencol freatico, sismo, temperatura e recalque ainda nao fazem parte do motor;
-- coeficientes normativos permanecem bloqueados ate a incorporacao das fontes tecnicas autorizadas.
+- geometria, volume e capacidade;
+- hidrostatica, solo saturado, peso proprio, sobrecarga e subpressao;
+- estimativa academica de solo por NSPT;
+- casos piscina cheia e piscina vazia;
+- paineis em duas direcoes ou balanco vertical;
+- resistencia da alvenaria nao armada, armadura, cisalhamento, esbeltez e triagem de ELS;
+- laje engastada, envelope inferior/superior e armadura nas duas direcoes;
+- selecao de bitola e espacamento;
+- quantitativos de blocos, aco, graute e concreto;
+- orquestrador `runPhase1Design` com verificacoes `PASS`, `FAIL` e `REQUIRES_REVIEW`.
+
+## Limites para uso profissional
+
+- o perfil incluido e academico e permanece com status `draft`;
+- fissuracao e flechas da laje exigem revisao normativa externa;
+- a verificacao global contra flutuacao nao inclui solo sobre a base, ancoragens ou interacao solo-estrutura;
+- sismo, temperatura, recalque e aberturas especiais nao fazem parte do motor;
+- emissao de projeto continua bloqueada ate revisao por engenheiro e incorporacao de fontes normativas autorizadas.

@@ -45,9 +45,21 @@ describe("wall panel actions", () => {
     expect(momentCoefficientForRatio(2)).toBeCloseTo(0.104);
   });
 
-  it("rejeita extrapolacao fora do dominio da tabela", () => {
+  it("usa balanco vertical quando h/L e inferior a 0,3", () => {
     const result = calculateWallPanelActions(
       { ...academicExample, panelLengthMm: 6_000, panelHeightMm: 1_000 },
+      SILVA_2022_ACADEMIC_PROFILE
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.analysisMethod).toBe("VERTICAL_CANTILEVER");
+    expect(result.value.designMomentPerpendicularKNMPerM).toBe(0);
+  });
+
+  it("rejeita razao acima do dominio academico", () => {
+    const result = calculateWallPanelActions(
+      { ...academicExample, panelLengthMm: 500, panelHeightMm: 1_600 },
       SILVA_2022_ACADEMIC_PROFILE
     );
 

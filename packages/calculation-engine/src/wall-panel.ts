@@ -88,7 +88,10 @@ export function calculateWallPanelActions(
   const heightM = input.panelHeightMm / 1_000;
   const thicknessM = input.wallThicknessMm / 1_000;
   const heightToLengthRatio = heightM / lengthM;
-  const momentCoefficient = momentCoefficientForRatio(heightToLengthRatio);
+  const usesCantileverMethod = heightToLengthRatio < 0.3;
+  const momentCoefficient = usesCantileverMethod
+    ? 1 / 6
+    : momentCoefficientForRatio(heightToLengthRatio);
 
   if (momentCoefficient === null) {
     return {
@@ -96,7 +99,7 @@ export function calculateWallPanelActions(
       errors: [{
         field: "heightToLengthRatio",
         code: "UNSUPPORTED_RATIO",
-        message: "A relacao h/L deve estar entre 0,3 e 2,0 para usar a tabela academica sem extrapolacao."
+        message: "A relacao h/L acima de 2,0 esta fora do dominio dos metodos academicos implementados."
       }]
     };
   }
@@ -110,13 +113,15 @@ export function calculateWallPanelActions(
     ? maximumWaterPressureKPa
     : maximumSoilPressureKPa;
   const governingAveragePressureKPa = governingMaximumPressureKPa / 2;
-  const designMomentParallelKNMPerM =
-    input.ultimateLoadFactor *
-    momentCoefficient *
-    governingAveragePressureKPa *
-    lengthM ** 2;
-  const designMomentPerpendicularKNMPerM =
-    input.orthogonalityCoefficient * designMomentParallelKNMPerM;
+  const designMomentParallelKNMPerM = usesCantileverMethod
+    ? input.ultimateLoadFactor * governingMaximumPressureKPa * heightM ** 2 / 6
+    : input.ultimateLoadFactor *
+      momentCoefficient *
+      governingAveragePressureKPa *
+      lengthM ** 2;
+  const designMomentPerpendicularKNMPerM = usesCantileverMethod
+    ? 0
+    : input.orthogonalityCoefficient * designMomentParallelKNMPerM;
   const effectiveHeightM = input.effectiveHeightFactor * heightM;
   const slendernessRatio = effectiveHeightM / thicknessM;
 
@@ -152,13 +157,21 @@ export function calculateWallPanelActions(
     {
       id: "parallel-design-moment",
       description: "Momento de calculo com tracao paralela as fiadas",
-      equation: "M_parallel = gamma_f * alpha * p_average * L^2",
-      substitutions: {
-        gamma_f: input.ultimateLoadFactor,
-        alpha: momentCoefficient,
-        p_average: governingAveragePressureKPa,
-        L: lengthM
-      },
+      equation: usesCantileverMethod
+        ? "M_parallel = gamma_f * p_max * h^2 / 6"
+        : "M_parallel = gamma_f * alpha * p_average * L^2",
+      substitutions: usesCantileverMethod
+        ? {
+            gamma_f: input.ultimateLoadFactor,
+            p_max: governingMaximumPressureKPa,
+            h: heightM
+          }
+        : {
+            gamma_f: input.ultimateLoadFactor,
+            alpha: momentCoefficient,
+            p_average: governingAveragePressureKPa,
+            L: lengthM
+          },
       result: designMomentParallelKNMPerM,
       unit: "kN.m/m"
     },
@@ -178,6 +191,7 @@ export function calculateWallPanelActions(
   return {
     ok: true,
     value: {
+      analysisMethod: usesCantileverMethod ? "VERTICAL_CANTILEVER" : "TWO_WAY_TABLE",
       activeEarthPressureCoefficient: activeCoefficient,
       maximumSoilPressureKPa,
       maximumWaterPressureKPa,
@@ -193,7 +207,9 @@ export function calculateWallPanelActions(
       trace,
       warnings: [
         "Modelo simplificado baseado em fonte academica secundaria.",
-        "A hipotese de painel apoiado em tres bordas e livre no topo deve ser confirmada no projeto.",
+        usesCantileverMethod
+          ? "Painel tratado como balanco vertical porque h/L < 0,3."
+          : "A hipotese de painel apoiado em tres bordas e livre no topo deve ser confirmada no projeto.",
         "O caso governante e selecionado sem considerar contraforte simultaneo na face oposta.",
         ...(profile.status === "draft" ? ["Perfil tecnico ainda nao revisado."] : [])
       ]
