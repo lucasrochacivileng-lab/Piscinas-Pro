@@ -2,7 +2,7 @@
 
 POOLSTRUCT e uma base de software para pre-dimensionamento e verificacao rastreavel de piscinas com paredes em alvenaria estrutural e laje de fundo em concreto armado. O objetivo e transformar entradas geometricas, materiais e perfis tecnicos versionados em memorias de calculo auditaveis.
 
-> Estado: implementacao da Fase 3 concluida na versao `0.4.0`. O produto inclui regressao ampliada, observabilidade sanitizada, backup verificavel e procedimento de recuperacao. A liberacao profissional continua bloqueada ate auditoria e assinatura de engenheiro independente.
+> Estado: Fase 4 concluida na versao `0.5.0`. O produto possui CI reproduzivel, testes E2E desktop/mobile, banco descartavel com lint e pgTAP, validacao de release e politica de atualizacao de dependencias. A liberacao profissional continua bloqueada ate auditoria e assinatura de engenheiro independente.
 
 ## Requisitos
 
@@ -28,6 +28,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify-local.ps1
 ```
 
 O script copia apenas os arquivos versionados para `%LOCALAPPDATA%\poolstruct\verify`, executa `npm ci`, testes, checagem e build. O repositorio Git continua em `G:`.
+
+Para incluir os seis cenarios Playwright e instalar o Chromium isolado quando necessario:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-local.ps1 -IncludeE2E
+```
 
 ## Estrutura
 
@@ -68,6 +74,29 @@ Somente a chave publica deve ser exposta no cliente. As politicas RLS vinculam p
 - pacote de auditoria independente com gates para liberacao profissional.
 
 Consulte `docs/operations-runbook.md` antes de executar backup ou restauracao. O backup remoto exige um projeto Supabase vinculado ou `POOLSTRUCT_DATABASE_URL`; a restauracao exige `psql` e um banco vazio descartavel.
+
+## Industrializacao da Fase 4
+
+- GitHub Actions para testes, TypeScript, build, Playwright, migrations, lint PostgreSQL e pgTAP;
+- E2E do fluxo completo, persistencia local, arquivamento, exportacao e falha correlacionada;
+- matriz desktop e mobile Chromium;
+- validador de release e configuracao de producao;
+- Supabase CLI e Playwright fixados por versao;
+- Dependabot semanal para npm e GitHub Actions;
+- politica de seguranca e checklist de homologacao.
+
+Validacao local da release:
+
+```powershell
+npm run release:validate
+npm test
+npm run check
+npm run build
+npx playwright install chromium
+npm run test:e2e
+```
+
+Em producao, defina apenas `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` antes de executar `npm run release:validate:production`. Nunca disponibilize `SUPABASE_SERVICE_ROLE_KEY` ao build do frontend.
 
 ## Capacidades da Fase 1
 

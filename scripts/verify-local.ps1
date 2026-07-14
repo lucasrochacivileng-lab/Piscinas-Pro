@@ -1,5 +1,7 @@
 [CmdletBinding()]
-param()
+param(
+  [switch]$IncludeE2E
+)
 
 $ErrorActionPreference = "Stop"
 $source = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
@@ -26,15 +28,22 @@ Push-Location $target
 try {
   & $npm ci --no-audit --no-fund
   if ($LASTEXITCODE -ne 0) { throw "npm ci falhou." }
+  & $npm run release:validate
+  if ($LASTEXITCODE -ne 0) { throw "Validacao de release falhou." }
   & $npm test
   if ($LASTEXITCODE -ne 0) { throw "Testes falharam." }
   & $npm run check
   if ($LASTEXITCODE -ne 0) { throw "Checagem TypeScript falhou." }
   & $npm run build
   if ($LASTEXITCODE -ne 0) { throw "Build falhou." }
+  if ($IncludeE2E) {
+    & $npm exec -- playwright install chromium
+    if ($LASTEXITCODE -ne 0) { throw "Instalacao do Chromium Playwright falhou." }
+    & $npm run test:e2e
+    if ($LASTEXITCODE -ne 0) { throw "Testes E2E falharam." }
+  }
 } finally {
   Pop-Location
 }
 
 Write-Host "POOLSTRUCT validado com sucesso em $target"
-

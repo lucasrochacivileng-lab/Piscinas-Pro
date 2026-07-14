@@ -52,3 +52,21 @@ Status da implementacao: concluida em 13/07/2026 na versao `0.4.0`.
 - [ ] drill executado contra projeto Supabase isolado.
 
 Os dois itens finais sao gates externos: dependem, respectivamente, de um profissional independente e de credenciais/infraestrutura Supabase. Eles nao bloqueiam a conclusao da implementacao de software, mas bloqueiam a liberacao profissional.
+
+## Fase 4 - Industrializacao e homologacao
+
+Status: concluida em 13/07/2026 na versao `0.5.0`.
+
+- [x] CI de qualidade, TypeScript e build;
+- [x] testes E2E desktop e mobile;
+- [x] migrations aplicadas em PostgreSQL descartavel no CI;
+- [x] lint do banco e pgTAP como gate de pull request;
+- [x] validador de release e configuracao de producao;
+- [x] relatorios e traces do Playwright como artefatos;
+- [x] atualizacoes automatizadas de dependencias;
+- [x] politica de seguranca e checklist de homologacao;
+- [ ] primeiro workflow executado no GitHub;
+- [ ] ambiente Supabase de staging provisionado;
+- [ ] deploy de staging aprovado.
+
+Os tres itens finais exigem infraestrutura externa e credenciais. O pipeline foi implementado para executa-los sem expor segredos assim que o repositorio for publicado e o staging configurado.

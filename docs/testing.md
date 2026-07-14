@@ -12,3 +12,13 @@ Cada correcao de calculo deve incluir um teste de regressao que falhe na versao 
 Na implementacao da Fase 3, a suite cobre regressao integrada, golden case residencial, determinismo, monotonicidade hidrostatica, matriz operacional sem valores nao finitos, observabilidade sem vazamento de mensagens brutas e contratos das duas migrations. A verificacao de entrega inclui TypeScript, build Vite, parse dos scripts PowerShell e fluxo real no navegador.
 
 Os testes pgTAP em `supabase/tests` devem ser executados com `npx supabase test db` em uma stack local ativa ou projeto de teste vinculado. Esse gate exige Docker ou credenciais de um banco descartavel.
+
+## Matriz da Fase 4
+
+- Vitest: 49 testes de motor, regressao, observabilidade, relatorio e contratos SQL;
+- Playwright: 3 cenarios em desktop Chromium e Pixel 7, totalizando 6 execucoes;
+- PostgreSQL CI: migrations, `db lint --fail-on error`, advisors e 27 assercoes pgTAP;
+- release: sincronismo de versoes, dependencias fixadas, migrations ordenadas e protecao de segredos;
+- browser: traces, videos e screenshots preservados somente em falhas.
+
+No CI, Playwright usa um worker para reduzir flakiness. O job do banco e separado do job de produto para indicar com clareza se a falha ocorreu no schema ou na aplicacao.
