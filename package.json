@@ -1,16 +1,18 @@
 {
   "name": "poolstruct",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "packageManager": "npm@11.4.2",
   "description": "Motor rastreavel para pre-dimensionamento estrutural de piscinas",
   "type": "module",
   "workspaces": [
+    "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "build": "tsc -b",
-    "check": "tsc -b --pretty false",
+    "build": "tsc -b && npm run build -w @poolstruct/web",
+    "check": "tsc -b --pretty false && npm run check -w @poolstruct/web",
+    "dev": "npm run dev -w @poolstruct/web",
     "test": "vitest run",
     "test:watch": "vitest"
   },

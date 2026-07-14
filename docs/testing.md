@@ -9,4 +9,4 @@
 
 Cada correcao de calculo deve incluir um teste de regressao que falhe na versao anterior.
 
-Na conclusao da Fase 1, a suite cobre 27 testes em 9 arquivos: primitivas de engenharia, hidrostatica, solo, paineis, cargas globais, alvenaria, laje, quantitativos e fluxo integrado.
+Na conclusao da Fase 2, a suite cobre 36 testes em 11 arquivos: os 27 testes do motor, contrato estatico da migration/RLS e geracao segura da memoria de calculo. A verificacao de entrega inclui TypeScript, build Vite e um fluxo real no navegador para criar projeto, calcular e confirmar a primeira revisao.

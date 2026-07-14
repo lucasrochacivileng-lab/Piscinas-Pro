@@ -2,7 +2,7 @@
 
 POOLSTRUCT e uma base de software para pre-dimensionamento e verificacao rastreavel de piscinas com paredes em alvenaria estrutural e laje de fundo em concreto armado. O objetivo e transformar entradas geometricas, materiais e perfis tecnicos versionados em memorias de calculo auditaveis.
 
-> Estado: Fase 1 concluida no escopo academico. O nucleo v0.2.0 executa cargas, paredes, laje, armaduras e quantitativos com rastreabilidade. Perfis academicos retornam `REQUIRES_REVIEW` e nao substituem a responsabilidade tecnica de um engenheiro.
+> Estado: Fase 2 concluida na versao `0.3.0`. A aplicacao web integra o nucleo academico de calculo a projetos, autenticacao opcional via Supabase, revisoes imutaveis e memoria de calculo exportavel. Os resultados nao substituem a responsabilidade tecnica de um engenheiro.
 
 ## Requisitos
 
@@ -16,6 +16,7 @@ npm install
 npm test
 npm run check
 npm run build
+npm run dev
 ```
 
 ### Projeto dentro do Google Drive para desktop
@@ -30,10 +31,31 @@ O script copia apenas os arquivos versionados para `%LOCALAPPDATA%\poolstruct\ve
 
 ## Estrutura
 
+- `apps/web`: aplicacao React/Vite responsiva
 - `packages/calculation-engine`: funcoes puras, unidades, validacao e rastreabilidade
 - `docs`: arquitetura, premissas, seguranca, testes e roadmap
-- `src`: reservado para a aplicacao web
-- `supabase`: reservado para migrations e configuracao local
+- `supabase`: migration, RLS, auditoria e testes pgTAP
+
+## Persistencia e autenticacao
+
+Sem configuracao externa, a aplicacao entra em modo local e salva os projetos no navegador. Para ativar autenticacao e persistencia Supabase:
+
+1. copie `.env.example` para `apps/web/.env.local`;
+2. informe `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`;
+3. aplique a migration de `supabase/migrations` no projeto Supabase;
+4. execute `npm run dev`.
+
+Somente a chave publica deve ser exposta no cliente. As politicas RLS vinculam projetos, revisoes, execucoes e auditoria ao usuario autenticado.
+
+## Capacidades da Fase 2
+
+- login e cadastro Supabase, com modo local para desenvolvimento;
+- criacao e arquivamento de projetos;
+- formulario completo integrado ao motor da Fase 1;
+- dashboard de resultados e verificacoes;
+- revisoes imutaveis, hash SHA-256 das entradas e auditoria;
+- memoria de calculo HTML autocontida e pronta para impressao;
+- layout responsivo para desktop e dispositivos moveis.
 
 ## Capacidades da Fase 1
 

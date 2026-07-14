@@ -24,9 +24,18 @@ O gate para uso profissional nao faz parte da conclusao academica: requer fontes
 
 ## Fase 2 - Produto
 
-- aplicacao web e autenticacao;
-- projetos e revisoes persistentes;
-- memoria de calculo exportavel.
+Status: concluida em 13/07/2026 na versao `0.3.0`.
+
+- [x] aplicacao React/Vite responsiva;
+- [x] autenticacao Supabase e modo local de desenvolvimento;
+- [x] cadastro e arquivamento de projetos;
+- [x] formulario integrado ao motor estrutural;
+- [x] dashboard de resultados e verificacoes;
+- [x] revisoes imutaveis com hash SHA-256;
+- [x] migration PostgreSQL, RLS, grants minimos e auditoria;
+- [x] memoria de calculo HTML exportavel e pronta para impressao.
+
+A aplicacao da migration em ambiente remoto depende das credenciais do projeto Supabase e nao faz parte do repositorio local.
 
 ## Fase 3 - Confiabilidade
 
