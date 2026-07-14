@@ -43,7 +43,7 @@ export async function reportOperationalError(
   storeLocally(event);
 
   if (supabase && ownerId) {
-    const context: Json = { errorName: event.errorName, appVersion: "0.5.0" };
+    const context: Json = { errorName: event.errorName, appVersion: "0.6.0" };
     await supabase.from("operational_events").insert({
       owner_id: ownerId,
       correlation_id: event.correlationId,

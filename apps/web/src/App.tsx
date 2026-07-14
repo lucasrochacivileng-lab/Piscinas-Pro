@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./auth/auth-context";
 import { AuthScreen } from "./components/AuthScreen";
 import { CalculationEditor } from "./components/CalculationEditor";
+import { DrawingPanel } from "./components/DrawingPanel";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ResultDashboard } from "./components/ResultDashboard";
 import { RevisionHistory } from "./components/RevisionHistory";
@@ -22,6 +23,7 @@ export function App() {
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [activeProject, setActiveProject] = useState<ProjectRecord | null>(null);
   const [revisions, setRevisions] = useState<RevisionRecord[]>([]);
+  const [activeRevision, setActiveRevision] = useState<RevisionRecord | null>(null);
   const [editorInput, setEditorInput] = useState<Phase1DesignInput>(DEFAULT_DESIGN_INPUT);
   const [result, setResult] = useState<Phase1DesignResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,6 +60,7 @@ export function App() {
       const records = await repository.listRevisions(project.id);
       setRevisions(records);
       const latest = records[0];
+      setActiveRevision(latest ?? null);
       setEditorInput(latest?.input ?? DEFAULT_DESIGN_INPUT);
       setResult(latest?.result ?? null);
     } catch (reason) {
@@ -83,6 +86,7 @@ export function App() {
       if (activeProject?.id === projectId) {
         setActiveProject(null);
         setRevisions([]);
+        setActiveRevision(null);
         setResult(null);
       }
       await refreshProjects();
@@ -101,6 +105,7 @@ export function App() {
       setActiveProject((current) => current ? { ...current, status: "calculated", updatedAt: revision.createdAt } : current);
       setEditorInput(input);
       setResult(calculation);
+      setActiveRevision(revision);
       setRevisions((current) => [revision, ...current]);
       await refreshProjects();
     } catch (reason) {
@@ -111,6 +116,7 @@ export function App() {
   }
 
   function openRevision(revision: RevisionRecord) {
+    setActiveRevision(revision);
     setEditorInput(revision.input);
     setResult(revision.result);
   }
@@ -128,9 +134,9 @@ export function App() {
       <ProjectSidebar projects={projects} activeProjectId={activeProject?.id ?? null} onSelect={(project) => void selectProject(project)} onCreate={createProject} onArchive={archiveProject} />
       <main className="main-content">
         {error && <div className="error-banner" role="alert"><strong>{error.message}</strong><small>Código do incidente: {error.correlationId}</small></div>}
-        {!activeProject ? <section className="welcome-card"><p className="eyebrow">Fase 4 · pronta para homologação</p><h1>Do modelo estrutural à memória de cálculo.</h1><p>Crie um projeto para dimensionar paredes e laje, registrar revisões imutáveis e emitir um relatório rastreável.</p><div className="welcome-features"><span>Motor determinístico</span><span>Histórico com SHA-256</span><span>CI e E2E automatizados</span></div></section> : <>
+        {!activeProject ? <section className="welcome-card"><p className="eyebrow">Fase 5 · desenhos automáticos</p><h1>Do modelo estrutural à prancha técnica.</h1><p>Crie um projeto para dimensionar paredes e laje, registrar revisões imutáveis e gerar desenhos vetoriais rastreáveis.</p><div className="welcome-features"><span>Motor determinístico</span><span>Prancha A3 em SVG</span><span>Histórico com SHA-256</span></div></section> : <>
           <section className="project-header"><div><p className="eyebrow">Projeto ativo</p><h1>{activeProject.name}</h1><p>{activeProject.location || "Local não informado"}</p></div><span className="project-state">{activeProject.status === "calculated" ? "Calculado" : "Rascunho"}</span></section>
-          <div className="content-grid"><div className="primary-column"><CalculationEditor initialInput={editorInput} busy={busy} onCalculate={calculate} />{result && <ResultDashboard result={result} />}</div><RevisionHistory project={activeProject} revisions={revisions} onOpen={openRevision} /></div>
+          <div className="content-grid"><div className="primary-column"><CalculationEditor initialInput={editorInput} busy={busy} onCalculate={calculate} />{result && <ResultDashboard result={result} />}{activeRevision && <DrawingPanel project={activeProject} revision={activeRevision} />}</div><RevisionHistory project={activeProject} revisions={revisions} onOpen={openRevision} /></div>
         </>}
       </main>
     </div>

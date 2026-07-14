@@ -15,10 +15,19 @@ Os testes pgTAP em `supabase/tests` devem ser executados com `npx supabase test 
 
 ## Matriz da Fase 4
 
-- Vitest: 49 testes de motor, regressao, observabilidade, relatorio e contratos SQL;
+- Vitest: 53 testes de motor, regressao, observabilidade, relatorio, desenhos e contratos SQL;
 - Playwright: 3 cenarios em desktop Chromium e Pixel 7, totalizando 6 execucoes;
 - PostgreSQL CI: migrations, `db lint --fail-on error`, advisors e 27 assercoes pgTAP;
 - release: sincronismo de versoes, dependencias fixadas, migrations ordenadas e protecao de segredos;
 - browser: traces, videos e screenshots preservados somente em falhas.
 
 No CI, Playwright usa um worker para reduzir flakiness. O job do banco e separado do job de produto para indicar com clareza se a falha ocorreu no schema ou na aplicacao.
+
+## Matriz da Fase 5
+
+- determinismo byte a byte da prancha SVG;
+- presenca de planta, corte, elevacao, quadro de armaduras e carimbo;
+- propagacao de geometria e armaduras calculadas;
+- rejeicao de `NaN`, `Infinity` e valores indefinidos no XML;
+- escape de nome e local informados pelo usuario;
+- E2E de visualizacao, download, nome do arquivo e conteudo da revisao R1.

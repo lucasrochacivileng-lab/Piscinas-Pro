@@ -70,3 +70,18 @@ Status: concluida em 13/07/2026 na versao `0.5.0`.
 - [ ] deploy de staging aprovado.
 
 Os tres itens finais exigem infraestrutura externa e credenciais. O pipeline foi implementado para executa-los sem expor segredos assim que o repositorio for publicado e o staging configurado.
+
+## Fase 5 - Desenhos
+
+Status: concluida em 13/07/2026 na versao `0.6.0`.
+
+- [x] prancha vetorial A3 gerada deterministicamente por revisao;
+- [x] planta de formas e armaduras com cotas internas e externas;
+- [x] corte A-A com niveis, lamina de agua, parede e laje;
+- [x] elevacao da parede longa com disposicao esquematica das barras;
+- [x] quadro de armaduras de paredes e laje nas duas faces e direcoes;
+- [x] carimbo com projeto, local, revisao, data, perfil e status;
+- [x] visualizacao responsiva e exportacao SVG no produto;
+- [x] testes unitarios, seguranca de metadados e cobertura E2E da exportacao.
+
+Os desenhos sao documentos de pre-dimensionamento academico. Detalhes de ancoragem, emendas, aberturas, juntas, impermeabilizacao e compatibilizacao executiva permanecem sob responsabilidade de engenheiro habilitado.

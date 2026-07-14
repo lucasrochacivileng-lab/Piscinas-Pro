@@ -38,6 +38,19 @@ test("cria projeto, calcula, persiste R1 e exporta a memória", async ({ page })
   await expect(page.getByRole("heading", { name: "Resultado estrutural" })).toBeVisible();
   await expect(page.getByText("44.800 L", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /R1/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Prancha estrutural" })).toBeVisible();
+  await expect(page.getByRole("img", { name: /Prancha estrutural Piscina E2E Alfa/ })).toBeVisible();
+
+  const drawingDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Baixar prancha SVG" }).click();
+  const drawingDownload = await drawingDownloadPromise;
+  expect(drawingDownload.suggestedFilename()).toBe("piscina-e2e-alfa-r1-ps-01.svg");
+  const drawingPath = await drawingDownload.path();
+  expect(drawingPath).not.toBeNull();
+  const drawing = await readFile(drawingPath!, "utf8");
+  expect(drawing).toContain("PLANTA DE FORMAS E ARMADURAS");
+  expect(drawing).toContain("CORTE A—A");
+  expect(drawing).toContain("R1");
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Baixar memória HTML" }).click();

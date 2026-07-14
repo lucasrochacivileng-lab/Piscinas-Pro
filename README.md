@@ -2,7 +2,7 @@
 
 POOLSTRUCT e uma base de software para pre-dimensionamento e verificacao rastreavel de piscinas com paredes em alvenaria estrutural e laje de fundo em concreto armado. O objetivo e transformar entradas geometricas, materiais e perfis tecnicos versionados em memorias de calculo auditaveis.
 
-> Estado: Fase 4 concluida na versao `0.5.0`. O produto possui CI reproduzivel, testes E2E desktop/mobile, banco descartavel com lint e pgTAP, validacao de release e politica de atualizacao de dependencias. A liberacao profissional continua bloqueada ate auditoria e assinatura de engenheiro independente.
+> Estado: Fase 5 concluida na versao `0.6.0`. O produto gera uma prancha estrutural A3 vetorial e rastreavel para cada revisao, alem de possuir CI reproduzivel, testes E2E desktop/mobile e validacao de release. A liberacao profissional continua bloqueada ate auditoria e assinatura de engenheiro independente.
 
 ## Requisitos
 
@@ -97,6 +97,17 @@ npm run test:e2e
 ```
 
 Em producao, defina apenas `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` antes de executar `npm run release:validate:production`. Nunca disponibilize `SUPABASE_SERVICE_ROLE_KEY` ao build do frontend.
+
+## Desenhos da Fase 5
+
+- prancha A3 `PS-01` em SVG aberto e vetorial;
+- planta de formas/armaduras, corte A-A e elevacao da parede longa;
+- cotas, niveis e chamadas derivados da revisao selecionada;
+- quadro com armaduras das paredes e das duas faces da laje;
+- carimbo rastreavel e aviso permanente de uso academico;
+- visualizacao no produto e download sem dependencia de AutoCAD.
+
+Consulte `docs/drawings.md` para convencoes, rastreabilidade e limites do desenho.
 
 ## Capacidades da Fase 1
 
