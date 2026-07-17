@@ -7,6 +7,7 @@ const bar = (diameterMm: number, spacingMm: number) => `Ø ${format(diameterMm, 
 export function ResultDashboard({ result }: { result: IntegratedDesignResult }) {
   const wallPanels = result.wallPanels ?? [];
   const slabZones = result.slabZones ?? [];
+  const zones = result.hydrostatic.zones ?? [];
   const geotechnical = result.geotechnical;
   const flotation = result.flotation;
   const integratedMasonry = result.masonry && "mortarStrengthMPa" in result.masonry ? result.masonry : null;
@@ -17,6 +18,8 @@ export function ResultDashboard({ result }: { result: IntegratedDesignResult }) 
       <article><small>Pressão máxima</small><strong>{format(result.hydrostatic.maximumWallPressureKPa)} kPa</strong></article>
       <article><small>NSPT de apoio</small><strong>{geotechnical ? geotechnical.foundationNspt : "—"}</strong></article>
       <article><small>FS flutuação</small><strong>{flotation?.safetyFactor === null ? "sem empuxo" : flotation ? format(flotation.safetyFactor, 2) : "—"}</strong></article>
+      <article><small>Zonas</small><strong>{zones.length || 1} zona(s)</strong></article>
+      <article><small>Paredes calculadas</small><strong>{wallPanels.length || 4}</strong></article>
     </div>
 
     {(result.profileLabel || result.profileId) && <><h3>Perfil de cálculo</h3><div className="reinforcement-grid"><article>
@@ -34,8 +37,8 @@ export function ResultDashboard({ result }: { result: IntegratedDesignResult }) 
       <article><h3>Equilíbrio</h3><p>FS calculado: {flotation.safetyFactor === null ? "não aplicável" : format(flotation.safetyFactor, 2)}</p><p>FS mínimo: {format(flotation.requiredSafetyFactor, 2)}</p><p>Empuxo líquido: {format(flotation.netUpliftKN, 1)} kN</p></article>
     </div></>}
 
-    {result.hydrostatic.zones && result.hydrostatic.zones.length > 1 && <><h3>Zonas de profundidade</h3><div className="reinforcement-grid">
-      {result.hydrostatic.zones.map((zone) => <article key={zone.id}><h3>{zone.label}</h3><p>{format(zone.lengthMm, 0)} mm de comprimento</p><p>{format(zone.waterDepthMm, 0)} mm de profundidade</p><p>{format(zone.volumeM3, 2)} m³ de água</p></article>)}
+    {zones.length > 1 && <><h3>Zonas de profundidade</h3><div className="reinforcement-grid">
+      {zones.map((zone) => <article key={zone.id}><h3>{zone.label}</h3><p>{format(zone.lengthMm, 0)} mm de comprimento</p><p>{format(zone.waterDepthMm, 0)} mm de profundidade</p><p>{format(zone.volumeM3, 2)} m³ de água</p></article>)}
     </div></>}
     <h3>Paredes individualizadas</h3><div className="reinforcement-grid">
       {wallPanels.length > 0 ? wallPanels.map((wall) => <article key={wall.id}>
