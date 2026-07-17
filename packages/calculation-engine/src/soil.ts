@@ -36,7 +36,7 @@ export const DEFAULT_GEOTECHNICAL_INPUT: GeotechnicalInput = Object.freeze({
   layers: Object.freeze([{
     id: "layer-1",
     label: "Solo de apoio",
-    soilType: "SAND",
+    soilType: "SAND" as const,
     topDepthMm: 0,
     bottomDepthMm: 5_000,
     nspt: 10,
