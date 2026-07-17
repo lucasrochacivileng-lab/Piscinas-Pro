@@ -6,7 +6,14 @@ export const DEFAULT_DESIGN_INPUT: Phase1DesignInput = {
     internalWidthMm: 4000,
     waterDepthMm: 1400,
     wallThicknessMm: 190,
-    slabThicknessMm: 200
+    slabThicknessMm: 200,
+    depthZones: [{
+      id: "main",
+      label: "Fundo principal",
+      kind: "MAIN",
+      lengthMm: 8000,
+      waterDepthMm: 1400
+    }]
   },
   saturatedSoilUnitWeightKNM3: 20,
   soilFrictionAngleDegrees: 30,
