@@ -40,9 +40,7 @@ const normalizeDepthZones = (
 };
 
 const normalizeLayers = (
-  layers: LegacyCompatibleInput["geotechnical"] extends infer T
-    ? T extends { readonly layers?: infer L } ? L : never
-    : never
+  layers: readonly Partial<SptLayerInput>[] | undefined
 ): readonly SptLayerInput[] => {
   const defaultLayer = DEFAULT_DESIGN_INPUT.geotechnical.layers[0]!;
   if (!layers || layers.length === 0) return DEFAULT_DESIGN_INPUT.geotechnical.layers;
@@ -50,7 +48,11 @@ const normalizeLayers = (
     ...defaultLayer,
     ...layer,
     id: typeof layer.id === "string" && layer.id.trim() !== "" ? layer.id : `layer-${index + 1}`,
-    label: typeof layer.label === "string" && layer.label.trim() !== "" ? layer.label : `Camada ${index + 1}`
+    label: typeof layer.label === "string" && layer.label.trim() !== "" ? layer.label : `Camada ${index + 1}`,
+    topDepthMm: finiteOr(layer.topDepthMm, defaultLayer.topDepthMm),
+    bottomDepthMm: finiteOr(layer.bottomDepthMm, defaultLayer.bottomDepthMm),
+    nspt: finiteOr(layer.nspt, defaultLayer.nspt),
+    material: layer.material ?? defaultLayer.material
   }));
 };
 
