@@ -1,17 +1,27 @@
 # Premissas normativas
 
-## Politica
+## Política
 
-O repositorio nao deve reproduzir texto protegido de normas. Ele registra apenas referencias bibliograficas, identificadores de clausulas, parametros necessarios ao calculo e justificativas tecnicas curtas.
+O repositório não deve reproduzir texto protegido de normas. Ele registra apenas referências bibliográficas, identificadores de itens, parâmetros necessários ao cálculo e justificativas técnicas curtas.
 
-Nenhum perfil deve ser marcado como apto para producao sem revisao de engenheiro habilitado, data de vigencia, jurisdicao e evidencia de origem de cada parametro.
+Nenhum perfil deve ser marcado como apto para produção sem revisão de engenheiro habilitado, data de vigência, jurisdição e evidência de origem de cada parâmetro.
 
 ## Estado atual
 
-O perfil demonstrativo define somente o peso especifico da agua como entrada explicita. Ele nao contem coeficientes de combinacao, cobrimento, limites de fissuracao ou propriedades de materiais impostas por norma.
+O perfil estrutural principal permanece acadêmico para combinações, dimensionamento de armaduras, fissuração e propriedades globais dos materiais. Esses parâmetros ainda não devem ser apresentados como perfil normativo integral.
 
-O trabalho de Silva (2022) foi incorporado como fonte academica secundaria e caso de regressao. Ele referencia, entre outras fontes, ABNT NBR 16868-1:2020 e ABNT NBR 6118:2014. A vigencia dessas edicoes e os valores normativos devem ser confirmados em fonte oficial licenciada antes de habilitar calculos de armadura ou marcar um perfil como revisado.
+A biblioteca de blocos, entretanto, incorpora parâmetros objetivos fornecidos da ABNT NBR 6136-1:2026 para:
 
-A consulta publica ao catalogo da ABNT realizada em 13/07/2026 nao retornou metadados especificos suficientes para confirmar o status das duas edicoes. Portanto o codigo nao as trata como vigentes.
+- classificação A, B e C e respectivas faixas discretas de `fbk`;
+- permissão de utilização abaixo do nível do solo;
+- famílias e dimensões nominais;
+- tolerâncias dimensionais;
+- requisitos mínimos de paredes, furos e mísulas;
+- limitações de uso da Classe C;
+- inspeção visual e controle de recebimento.
 
-Tambem foi observada uma provavel inconsistencia de edicao na Equacao 27 da pagina 31 do PDF: o texto diz calcular `KZ` a partir de `KX`, mas a expressao renderizada usa `KZ` dos dois lados. Essa etapa nao foi implementada.
+Verificações que dependem de medição, certificado ou ensaio do lote são emitidas como `REQUIRES_REVIEW`. A seleção de catálogo não produz aprovação automática.
+
+O trabalho de Silva (2022) continua incorporado como fonte acadêmica secundária e caso de regressão. Ele referencia, entre outras fontes, ABNT NBR 16868-1:2020 e ABNT NBR 6118:2014. A vigência dessas edições e os valores normativos devem ser confirmados em fonte oficial licenciada antes de habilitar um perfil estrutural como revisado.
+
+Também foi observada uma provável inconsistência de edição na Equação 27 da página 31 do PDF acadêmico: o texto diz calcular `KZ` a partir de `KX`, mas a expressão renderizada usa `KZ` dos dois lados. Essa etapa não foi implementada.
