@@ -198,8 +198,9 @@ const slabSteelSchedule = (
 ];
 
 /**
- * Levantamento acadêmico por elemento. Em geometrias escalonadas, cada parede e
- * cada laje de zona são contabilizadas separadamente, incluindo paredes de degrau.
+ * Levantamento preliminar por elemento. Em geometrias inclinadas, as paredes
+ * laterais usam a altura média de cada segmento e as lajes usam o comprimento
+ * real da rampa. Degraus e trechos horizontais permanecem individualizados.
  */
 export function takeoffPoolQuantities(
   geometry: PoolGeometryInput,
@@ -238,9 +239,20 @@ export function takeoffPoolQuantities(
     steel: wallSteelSchedule(lengthMm, heightMm, wall, options.anchorageMm)
   });
 
+  const geometricPanelsById = new Map(
+    (result.geometryModel?.wallPanels ?? []).map((panel) => [panel.id, panel] as const)
+  );
   const hasIndividualWalls = Array.isArray(result.wallPanels) && result.wallPanels.length > 0;
   const walls: WallQuantityInput[] = hasIndividualWalls
-    ? result.wallPanels.map((wall) => makeWallInput(wall.id, wall.lengthMm, wall.heightMm, wall))
+    ? result.wallPanels.map((wall) => {
+        const geometricPanel = geometricPanelsById.get(wall.id);
+        return makeWallInput(
+          wall.id,
+          wall.lengthMm,
+          geometricPanel?.quantityHeightMm ?? wall.heightMm,
+          wall
+        );
+      })
     : [
         makeWallInput("parede-longa", internalLengthMm + 2 * wallThicknessMm, waterDepthMm, result.longWall, 2),
         makeWallInput("parede-curta", internalWidthMm, waterDepthMm, result.shortWall, 2)
@@ -252,7 +264,8 @@ export function takeoffPoolQuantities(
     ? result.slabZones.map((slabZone, index) => {
         const first = index === 0;
         const last = index === result.slabZones.length - 1;
-        const lengthMm = slabZone.zone.lengthMm +
+        const physicalZoneLengthMm = slabZone.zone.floorLengthMm ?? slabZone.zone.lengthMm;
+        const lengthMm = physicalZoneLengthMm +
           (first ? wallThicknessMm : 0) +
           (last ? wallThicknessMm : 0);
         return {

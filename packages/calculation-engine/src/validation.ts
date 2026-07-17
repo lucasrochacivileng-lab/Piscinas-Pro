@@ -8,7 +8,11 @@ const LIMITS_MM = {
   slabThicknessMm: [50, 5_000]
 } as const;
 
+const ZONE_DEPTH_LIMITS_MM = [0, 20_000] as const;
 type ScalarGeometryField = keyof typeof LIMITS_MM;
+
+const zoneDepth = (value: number | undefined, fallback: number): number =>
+  typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
 export function validateGeometry(input: PoolGeometryInput): CalculationError[] {
   const errors: CalculationError[] = [];
@@ -54,11 +58,27 @@ export function validateGeometry(input: PoolGeometryInput): CalculationError[] {
     if (!Number.isFinite(zone.lengthMm) || zone.lengthMm < 100 || zone.lengthMm > input.internalLengthMm) {
       errors.push({ field, code: "OUT_OF_RANGE", message: `Comprimento da zona ${zone.label || index + 1} deve ser válido e positivo.` });
     }
-    if (!Number.isFinite(zone.waterDepthMm) || zone.waterDepthMm < 100 || zone.waterDepthMm > 20_000) {
-      errors.push({ field, code: "OUT_OF_RANGE", message: `Profundidade da zona ${zone.label || index + 1} deve estar entre 100 e 20.000 mm.` });
+
+    const floorProfile = zone.floorProfile ?? "HORIZONTAL";
+    const startDepthMm = zoneDepth(zone.startWaterDepthMm, zone.waterDepthMm);
+    const endDepthMm = zoneDepth(zone.endWaterDepthMm, zone.waterDepthMm);
+    for (const [label, depthMm] of [["inicial", startDepthMm], ["final", endDepthMm]] as const) {
+      if (!Number.isFinite(depthMm) || depthMm < ZONE_DEPTH_LIMITS_MM[0] || depthMm > ZONE_DEPTH_LIMITS_MM[1]) {
+        errors.push({ field, code: "OUT_OF_RANGE", message: `Profundidade ${label} da zona ${zone.label || index + 1} deve estar entre 0 e 20.000 mm.` });
+      }
+    }
+    if (floorProfile === "HORIZONTAL" && Math.abs(startDepthMm - endDepthMm) > 1) {
+      errors.push({ field, code: "INVALID_GEOMETRY", message: `${zone.label}: piso horizontal exige profundidades inicial e final iguais.` });
+    }
+    if (floorProfile === "SLOPED" && Math.abs(startDepthMm - endDepthMm) <= 1) {
+      errors.push({ field, code: "INVALID_GEOMETRY", message: `${zone.label}: piso inclinado exige profundidades inicial e final diferentes.` });
+    }
+    const zoneMaximumDepthMm = Math.max(startDepthMm, endDepthMm);
+    if (Math.abs(zone.waterDepthMm - zoneMaximumDepthMm) > 1) {
+      errors.push({ field, code: "INVALID_GEOMETRY", message: `${zone.label}: waterDepthMm deve coincidir com a maior profundidade do trecho (${zoneMaximumDepthMm} mm).` });
     }
     totalLengthMm += zone.lengthMm;
-    maximumDepthMm = Math.max(maximumDepthMm, zone.waterDepthMm);
+    maximumDepthMm = Math.max(maximumDepthMm, zoneMaximumDepthMm);
   });
 
   if (Math.abs(totalLengthMm - input.internalLengthMm) > 1) {

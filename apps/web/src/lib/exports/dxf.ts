@@ -1,4 +1,7 @@
-import type { PoolDepthZoneInput } from "@poolstruct/calculation-engine";
+import {
+  normalizePoolDepthZones,
+  type NormalizedDepthZone
+} from "@poolstruct/calculation-engine";
 import type { ProjectRecord, RevisionRecord } from "../models";
 
 // Exportação DXF R12 ASCII em milímetros reais, sem dependência de AutoCAD.
@@ -26,64 +29,73 @@ function text(layer: string, x: number, y: number, heightMm: number, value: stri
   return ["0", "TEXT", "8", layer, "10", num(x), "20", num(y), "30", "0", "40", num(heightMm), "1", sanitized].join("\n");
 }
 
-function zonesFrom(revision: RevisionRecord): readonly PoolDepthZoneInput[] {
+function zonesFrom(revision: RevisionRecord): readonly NormalizedDepthZone[] {
   const modelZones = revision.result.geometryModel?.zones;
   if (Array.isArray(modelZones) && modelZones.length > 0) return modelZones;
-  const inputZones = revision.input.geometry.depthZones;
-  if (inputZones && inputZones.length > 0) return inputZones;
-  return [{
-    id: "main",
-    label: "Fundo principal",
-    kind: "MAIN",
-    lengthMm: revision.input.geometry.internalLengthMm,
-    waterDepthMm: revision.input.geometry.waterDepthMm
-  }];
+  return normalizePoolDepthZones(revision.input.geometry);
 }
 
 export function buildTechnicalDrawingDxf(project: ProjectRecord, revision: RevisionRecord): string {
   const { internalLengthMm: length, internalWidthMm: width, wallThicknessMm: wall, slabThicknessMm: slab } = revision.input.geometry;
   const zones = zonesFrom(revision);
-  const maxDepth = Math.max(...zones.map((zone) => zone.waterDepthMm));
+  const maxDepth = Math.max(...zones.map((zone) => zone.maximumWaterDepthMm));
   const outerLength = length + 2 * wall;
   const outerWidth = width + 2 * wall;
   const entities: string[] = [];
 
   // Planta: perímetro, espelho d'água, limites das zonas e identificação.
-  entities.push(text("TEXTO", 0, outerWidth + 500, 120, "PLANTA DE FORMAS - ZONAS DE PROFUNDIDADE"));
+  entities.push(text("TEXTO", 0, outerWidth + 500, 120, "PLANTA DE FORMAS - PERFIL LONGITUDINAL"));
   entities.push(rect("PAREDE", 0, 0, outerLength, outerWidth));
   entities.push(rect("AGUA", wall, wall, length, width));
   let planCursor = wall;
   zones.forEach((zone, index) => {
-    if (index > 0) entities.push(line("DEGRAU", planCursor, wall, planCursor, wall + width));
-    entities.push(text("ZONAS", planCursor + zone.lengthMm / 2, wall + width / 2, 90, `${zone.label} - h=${zone.waterDepthMm.toFixed(0)} mm`));
+    if (index > 0) entities.push(line("TRANSICAO", planCursor, wall, planCursor, wall + width));
+    const zoneText = zone.floorProfile === "SLOPED"
+      ? `${zone.label} - h=${zone.startWaterDepthMm.toFixed(0)}>${zone.endWaterDepthMm.toFixed(0)} mm - i=${zone.slopePercent.toFixed(2)}%`
+      : `${zone.label} - h=${zone.waterDepthMm.toFixed(0)} mm`;
+    entities.push(text("ZONAS", planCursor + zone.lengthMm / 2, wall + width / 2, 90, zoneText));
     planCursor += zone.lengthMm;
   });
   entities.push(text("COTAS", outerLength / 2, -180, 90, `${outerLength.toFixed(0)} mm`));
   entities.push(text("COTAS", -260, outerWidth / 2, 90, `${outerWidth.toFixed(0)} mm`));
 
-  // Corte longitudinal A-A abaixo da planta. N.A. comum e fundo escalonado.
+  // Corte longitudinal A-A abaixo da planta, com fundo horizontal, escalonado ou inclinado.
   const waterLevelY = -(outerWidth + 1_500);
   const sectionBaseY = waterLevelY - maxDepth - slab;
-  entities.push(text("TEXTO", 0, waterLevelY + 350, 120, "CORTE LONGITUDINAL A-A - PERFIL ESCALONADO"));
+  entities.push(text("TEXTO", 0, waterLevelY + 350, 120, revision.result.geometryModel?.hasSlopedFloor
+    ? "CORTE LONGITUDINAL A-A - PRAIA INCLINADA"
+    : "CORTE LONGITUDINAL A-A - PERFIL ESCALONADO"));
   entities.push(line("NIVEL", wall, waterLevelY, wall + length, waterLevelY));
   entities.push(rect("PAREDE", 0, waterLevelY - maxDepth - slab, wall, maxDepth + slab));
   entities.push(rect("PAREDE", wall + length, waterLevelY - maxDepth - slab, wall, maxDepth + slab));
 
   let sectionCursor = wall;
   zones.forEach((zone, index) => {
-    const floorTopY = waterLevelY - zone.waterDepthMm;
-    entities.push(rect("LAJE", sectionCursor, floorTopY - slab, zone.lengthMm, slab));
-    entities.push(line("AGUA", sectionCursor, waterLevelY, sectionCursor + zone.lengthMm, waterLevelY));
-    entities.push(text("ZONAS", sectionCursor + zone.lengthMm / 2, floorTopY + 120, 80, `${zone.label} - fundo -${(zone.waterDepthMm / 1_000).toFixed(2)} m`));
+    const x1 = sectionCursor;
+    const x2 = sectionCursor + zone.lengthMm;
+    const startFloorY = waterLevelY - zone.startWaterDepthMm;
+    const endFloorY = waterLevelY - zone.endWaterDepthMm;
+    entities.push(line("LAJE", x1, startFloorY, x2, endFloorY));
+    entities.push(line("LAJE", x1, startFloorY - slab, x2, endFloorY - slab));
+    entities.push(line("LAJE", x1, startFloorY, x1, startFloorY - slab));
+    entities.push(line("LAJE", x2, endFloorY, x2, endFloorY - slab));
+    entities.push(line("AGUA", x1, waterLevelY, x2, waterLevelY));
+    const zoneText = zone.floorProfile === "SLOPED"
+      ? `${zone.label} - ${zone.startWaterDepthMm.toFixed(0)}>${zone.endWaterDepthMm.toFixed(0)} mm - i=${zone.slopePercent.toFixed(2)}% - Lreal=${zone.floorLengthMm.toFixed(0)} mm`
+      : `${zone.label} - fundo -${(zone.waterDepthMm / 1_000).toFixed(2)} m`;
+    entities.push(text("ZONAS", (x1 + x2) / 2, (startFloorY + endFloorY) / 2 + 120, 80, zoneText));
     if (index > 0) {
       const previous = zones[index - 1];
       if (previous) {
-        const previousFloorY = waterLevelY - previous.waterDepthMm;
-        entities.push(rect("DEGRAU", sectionCursor - wall / 2, Math.min(previousFloorY, floorTopY) - slab, wall, Math.abs(previousFloorY - floorTopY) + slab));
-        entities.push(text("DEGRAU", sectionCursor + 100, (previousFloorY + floorTopY) / 2, 70, `DEGRAU ${Math.abs(zone.waterDepthMm - previous.waterDepthMm).toFixed(0)} mm`));
+        const previousFloorY = waterLevelY - previous.endWaterDepthMm;
+        const stepHeight = Math.abs(previous.endWaterDepthMm - zone.startWaterDepthMm);
+        if (stepHeight > 1) {
+          entities.push(rect("DEGRAU", x1 - wall / 2, Math.min(previousFloorY, startFloorY) - slab, wall, Math.abs(previousFloorY - startFloorY) + slab));
+          entities.push(text("DEGRAU", x1 + 100, (previousFloorY + startFloorY) / 2, 70, `DEGRAU ${stepHeight.toFixed(0)} mm`));
+        }
       }
     }
-    sectionCursor += zone.lengthMm;
+    sectionCursor = x2;
   });
   entities.push(text("NIVEL", outerLength + 200, waterLevelY, 90, "N.A. +-0,00"));
   entities.push(text("NIVEL", outerLength + 200, waterLevelY - maxDepth, 90, `FUNDO MAX -${(maxDepth / 1_000).toFixed(2)}`));
@@ -103,7 +115,7 @@ export function buildTechnicalDrawingDxf(project: ProjectRecord, revision: Revis
   const stampY = sectionBaseY - 900;
   entities.push(text("CARIMBO", 0, stampY + 200, 110, `POOLSTRUCT - ${project.name}`));
   entities.push(text("CARIMBO", 0, stampY, 90, `Revisao R${revision.revisionNumber} - ${project.location || "Local nao informado"}`));
-  entities.push(text("CARIMBO", 0, stampY - 200, 80, `Motor ${revision.result.engineVersion} - Status ${revision.result.overallStatus} - PRE-DIMENSIONAMENTO ACADEMICO`));
+  entities.push(text("CARIMBO", 0, stampY - 200, 80, `Motor ${revision.result.engineVersion} - Status ${revision.result.overallStatus} - PRE-DIMENSIONAMENTO`));
 
   return [
     "0", "SECTION", "2", "HEADER",

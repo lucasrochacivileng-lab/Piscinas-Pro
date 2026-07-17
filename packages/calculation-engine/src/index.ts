@@ -179,6 +179,7 @@ export type {
   NormativeProfile,
   PoolDepthZoneInput,
   PoolDepthZoneKind,
+  PoolFloorProfile,
   PoolGeometryInput,
   TraceStep,
   WallPanelError,

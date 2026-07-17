@@ -142,20 +142,44 @@ export function evaluateGeotechnicalModel(
   const wallSoil = findLayerAtDepth(layers, wallReferenceDepthMm);
   const bearingSoil = findLayerAtDepth(layers, input.excavationBottomDepthMm);
   const waterTableHead = Math.max(0, input.excavationBottomDepthMm - input.groundLevelToWaterLevelMm);
+  const wallThicknessM = wallThicknessMm / 1_000;
+  const slabThicknessM = slabThicknessMm / 1_000;
   const outerLengthM = (geometry.internalLengthMm + 2 * wallThicknessMm) / 1_000;
   const outerWidthM = (geometry.internalWidthMm + 2 * wallThicknessMm) / 1_000;
-  const deepestExternalHeightM = (geometry.maximumWaterDepthMm + slabThicknessMm) / 1_000;
-  const displacedVolumeM3 = outerLengthM * outerWidthM * Math.min(deepestExternalHeightM, waterTableHead / 1_000);
+  const deepestExternalHeightMm = geometry.maximumWaterDepthMm + slabThicknessMm;
+  const groundwaterElevationDepthMm = deepestExternalHeightMm - waterTableHead;
+  const submergedHeadMm = (waterDepthMm: number): number =>
+    Math.max(0, waterDepthMm + slabThicknessMm - groundwaterElevationDepthMm);
+
+  const zoneDisplacedVolumeM3 = geometry.zones.reduce((total, zone) => {
+    const startHeadM = submergedHeadMm(zone.startWaterDepthMm) / 1_000;
+    const endHeadM = submergedHeadMm(zone.endWaterDepthMm) / 1_000;
+    return total + zone.lengthMm / 1_000 * outerWidthM * (startHeadM + endHeadM) / 2;
+  }, 0);
+  const firstZone = geometry.zones[0];
+  const lastZone = geometry.zones.at(-1);
+  const endStripVolumeM3 = firstZone && lastZone
+    ? wallThicknessM * outerWidthM * (
+        submergedHeadMm(firstZone.startWaterDepthMm) + submergedHeadMm(lastZone.endWaterDepthMm)
+      ) / 1_000
+    : 0;
+  const displacedVolumeM3 = zoneDisplacedVolumeM3 + endStripVolumeM3;
   const characteristicUpliftKN = displacedVolumeM3 * waterUnitWeightKNM3;
   const designUpliftKN = characteristicUpliftKN * actionFactor;
 
-  const slabVolumeM3 = outerLengthM * outerWidthM * slabThicknessMm / 1_000;
-  const perimeterM = 2 * (outerLengthM + outerWidthM);
-  const wallVolumeM3 = perimeterM * wallThicknessMm / 1_000 * geometry.maximumWaterDepthMm / 1_000;
-  const stepWallVolumeM3 = geometry.transitions.reduce((total, step) => total +
-    geometry.internalWidthMm / 1_000 * wallThicknessMm / 1_000 * step.heightMm / 1_000, 0);
+  const inclinedSlabVolumeM3 = geometry.zones.reduce(
+    (total, zone) => total + zone.floorLengthMm / 1_000 * outerWidthM * slabThicknessM,
+    0
+  );
+  const endSlabVolumeM3 = 2 * wallThicknessM * outerWidthM * slabThicknessM;
+  const slabVolumeM3 = inclinedSlabVolumeM3 + endSlabVolumeM3;
+  const wallVolumeM3 = geometry.wallPanels.reduce(
+    (total, panel) => total +
+      panel.lengthMm / 1_000 * (panel.quantityHeightMm ?? panel.heightMm) / 1_000 * wallThicknessM,
+    0
+  );
   const structureWeightKN = slabVolumeM3 * concreteUnitWeightKNM3 +
-    (wallVolumeM3 + stepWallVolumeM3) * masonryUnitWeightKNM3;
+    wallVolumeM3 * masonryUnitWeightKNM3;
   const permanentSoilCoverWeightKN = outerLengthM * outerWidthM *
     input.permanentSoilCoverThicknessMm / 1_000 * input.permanentSoilCoverUnitWeightKNM3;
   const totalStabilizingWeightKN = structureWeightKN + permanentSoilCoverWeightKN + input.additionalPermanentBallastKN;
@@ -228,8 +252,8 @@ export function evaluateGeotechnicalModel(
     trace: [
       {
         id: "global-uplift",
-        description: "Empuxo hidrostático global de projeto na piscina vazia",
-        equation: "Ud = gamma_f * gamma_w * V_submerso",
+        description: "Empuxo hidrostático global de projeto na piscina vazia, integrado pelo perfil externo do fundo",
+        equation: "Ud = gamma_f * gamma_w * integral(B_ext * h_sub(x) dx)",
         substitutions: { gamma_f: actionFactor, gamma_w: waterUnitWeightKNM3, V_submerso: displacedVolumeM3 },
         result: designUpliftKN,
         unit: "kN"
@@ -245,7 +269,9 @@ export function evaluateGeotechnicalModel(
     ],
     warnings: [
       "O NSPT deve ser transcrito do boletim de sondagem, sem suavização automática.",
-      "A flutuação global considera piscina vazia e não considera atrito lateral como resistência permanente.",
+      geometry.hasSlopedFloor
+        ? "A flutuação global integra o perfil inclinado do fundo e não considera atrito lateral como resistência permanente."
+        : "A flutuação global considera piscina vazia e não considera atrito lateral como resistência permanente.",
       "Camadas compressíveis, colapsíveis, expansivas ou com aterro não controlado exigem análise específica."
     ]
   };

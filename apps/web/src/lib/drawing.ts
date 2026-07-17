@@ -1,7 +1,8 @@
-import type {
-  Phase1DesignInput,
-  Phase1DesignResult,
-  PoolDepthZoneInput
+import {
+  normalizePoolDepthZones,
+  type NormalizedDepthZone,
+  type Phase1DesignInput,
+  type Phase1DesignResult
 } from "@poolstruct/calculation-engine";
 import type { ProjectRecord, RevisionRecord } from "./models";
 
@@ -21,6 +22,7 @@ const bar = (diameterMm: number, spacingMm: number): string => `Ø${mm(diameterM
 const line = (x1: number, y1: number, x2: number, y2: number, className = "thin"): string => `<line class="${className}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
 const text = (x: number, y: number, value: string, className = "label", anchor = "start"): string => `<text class="${className}" x="${x}" y="${y}" text-anchor="${anchor}">${escapeXml(value)}</text>`;
 const rect = (x: number, y: number, width: number, height: number, className: string): string => `<rect class="${className}" x="${x}" y="${y}" width="${width}" height="${height}"/>`;
+const path = (d: string, className: string): string => `<path class="${className}" d="${d}"/>`;
 
 function horizontalDimension(x1: number, x2: number, y: number, targetY: number, label: string): string {
   return `${line(x1, targetY, x1, y + 2, "extension")}${line(x2, targetY, x2, y + 2, "extension")}` +
@@ -35,12 +37,10 @@ function verticalDimension(x: number, y1: number, y2: number, targetX: number, l
     `<text class="dimension-text" x="${x - 2}" y="${cy}" text-anchor="middle" transform="rotate(-90 ${x - 2} ${cy})">${escapeXml(label)}</text>`;
 }
 
-function zonesFrom(input: Phase1DesignInput, result: Phase1DesignResult): readonly PoolDepthZoneInput[] {
+function zonesFrom(input: Phase1DesignInput, result: Phase1DesignResult): readonly NormalizedDepthZone[] {
   const resultZones = result.geometryModel?.zones;
   if (Array.isArray(resultZones) && resultZones.length > 0) return resultZones;
-  const inputZones = input.geometry.depthZones;
-  if (inputZones && inputZones.length > 0) return inputZones;
-  return [{ id: "main", label: "Fundo principal", kind: "MAIN", lengthMm: input.geometry.internalLengthMm, waterDepthMm: input.geometry.waterDepthMm }];
+  return normalizePoolDepthZones(input.geometry);
 }
 
 function reinforcementLines(x: number, y: number, width: number, height: number, direction: "horizontal" | "vertical", physicalLengthMm: number, spacingMm: number): string {
@@ -73,15 +73,18 @@ function planView(input: Phase1DesignInput, result: Phase1DesignResult): string 
     const zoneWidth = zone.lengthMm * scale;
     const center = cursor + zoneWidth / 2;
     const boundary = index === 0 ? "" : line(cursor, innerY, cursor, innerY + innerHeight, "step-line");
+    const depthLabel = zone.floorProfile === "SLOPED"
+      ? `h=${mm(zone.startWaterDepthMm)}→${mm(zone.endWaterDepthMm)} mm · i=${zone.slopePercent.toFixed(2)}%`
+      : `h=${mm(zone.waterDepthMm)} mm`;
     const label = text(center, innerY + innerHeight / 2 - 1, zone.label, "zone-label", "middle") +
-      text(center, innerY + innerHeight / 2 + 4, `h=${mm(zone.waterDepthMm)} mm`, "zone-note", "middle");
+      text(center, innerY + innerHeight / 2 + 4, depthLabel, "zone-note", "middle");
     cursor += zoneWidth;
     return boundary + label;
   }).join("");
   const slabX = result.slabZones?.[0]?.design.bottomX ?? result.slab.bottomX;
   const slabY = result.slabZones?.[0]?.design.bottomY ?? result.slab.bottomY;
-  return `<g id="planta" data-view="plan">${text(14, 18, "PLANTA DE FORMAS — ZONAS DE PROFUNDIDADE", "view-title")}` +
-    text(14, 23, `${zones.length} zona(s) · cotas em mm`, "note") +
+  return `<g id="planta" data-view="plan">${text(14, 18, "PLANTA DE FORMAS — PERFIL LONGITUDINAL", "view-title")}` +
+    text(14, 23, `${zones.length} zona(s) · ${result.geometryModel?.hasSlopedFloor ? "praia inclinada ativa" : "fundo horizontal/escalonado"}`, "note") +
     rect(x, y, drawingWidth, drawingHeight, "concrete") + rect(innerX, innerY, innerWidth, innerHeight, "water") +
     reinforcementLines(innerX, innerY, innerWidth, innerHeight, "vertical", length, slabX.layout.spacingMm) +
     reinforcementLines(innerX, innerY, innerWidth, innerHeight, "horizontal", width, slabY.layout.spacingMm) +
@@ -97,7 +100,7 @@ function planView(input: Phase1DesignInput, result: Phase1DesignResult): string 
 function sectionView(input: Phase1DesignInput, result: Phase1DesignResult): string {
   const zones = zonesFrom(input, result);
   const { internalLengthMm: length, wallThicknessMm: wall, slabThicknessMm: slab } = input.geometry;
-  const maxDepth = Math.max(...zones.map((zone) => zone.waterDepthMm));
+  const maxDepth = Math.max(...zones.map((zone) => zone.maximumWaterDepthMm));
   const horizontalScale = 188 / (length + 2 * wall);
   const verticalScale = 68 / (maxDepth + slab);
   const x = 20;
@@ -109,22 +112,32 @@ function sectionView(input: Phase1DesignInput, result: Phase1DesignResult): stri
   const outerWidth = innerWidth + 2 * wallDraw;
   const bottom = top + maxDepth * verticalScale + slabDraw;
   let cursor = innerX;
-  const zoneRects = zones.map((zone, index) => {
+  const zoneGraphics = zones.map((zone, index) => {
     const zoneWidth = zone.lengthMm * horizontalScale;
-    const floorY = top + zone.waterDepthMm * verticalScale;
-    const waterHeight = Math.max(1, floorY - top);
-    const slabZone = result.slabZones?.[index];
-    const zoneDrawing = rect(cursor, top, zoneWidth, waterHeight, "water") +
-      rect(cursor, floorY, zoneWidth, slabDraw, "hatch") +
-      text(cursor + zoneWidth / 2, floorY - 3, `${zone.label} · ${metres(zone.waterDepthMm)} m`, "zone-section-label", "middle") +
-      (slabZone ? text(cursor + zoneWidth / 2, floorY + slabDraw / 2 + 1, bar(slabZone.design.bottomX.layout.diameterMm, slabZone.design.bottomX.layout.spacingMm), "tiny", "middle") : "");
-    const step = index > 0 ? rect(cursor - 1.1, Math.min(top + (zones[index - 1]?.waterDepthMm ?? 0) * verticalScale, floorY), 2.2, Math.abs((zones[index - 1]?.waterDepthMm ?? 0) - zone.waterDepthMm) * verticalScale + slabDraw, "step-wall") : "";
-    cursor += zoneWidth;
-    return step + zoneDrawing;
+    const startFloorY = top + zone.startWaterDepthMm * verticalScale;
+    const endFloorY = top + zone.endWaterDepthMm * verticalScale;
+    const x1 = cursor;
+    const x2 = cursor + zoneWidth;
+    const water = path(`M ${x1} ${top} H ${x2} V ${endFloorY} L ${x1} ${startFloorY} Z`, "water");
+    const slabShape = path(`M ${x1} ${startFloorY} L ${x2} ${endFloorY} L ${x2} ${endFloorY + slabDraw} L ${x1} ${startFloorY + slabDraw} Z`, "hatch");
+    const midpointY = (startFloorY + endFloorY) / 2;
+    const slabZone = result.slabZones?.find((candidate) => candidate.zone.id === zone.id);
+    const profileText = zone.floorProfile === "SLOPED"
+      ? `${zone.label} · ${metres(zone.startWaterDepthMm)}→${metres(zone.endWaterDepthMm)} m · ${zone.slopePercent.toFixed(2)}%`
+      : `${zone.label} · ${metres(zone.waterDepthMm)} m`;
+    const label = text((x1 + x2) / 2, midpointY - 3, profileText, "zone-section-label", "middle") +
+      (slabZone ? text((x1 + x2) / 2, midpointY + slabDraw / 2 + 2, bar(slabZone.design.bottomX.layout.diameterMm, slabZone.design.bottomX.layout.spacingMm), "tiny", "middle") : "");
+    const previous = zones[index - 1];
+    const stepHeight = previous ? Math.abs(previous.endWaterDepthMm - zone.startWaterDepthMm) * verticalScale : 0;
+    const step = previous && stepHeight > 0.1
+      ? rect(x1 - 1.1, Math.min(top + previous.endWaterDepthMm * verticalScale, startFloorY), 2.2, stepHeight + slabDraw, "step-wall")
+      : "";
+    cursor = x2;
+    return step + water + slabShape + label;
   }).join("");
   return `<g id="corte-a-a" data-view="section">${text(14, 141, "CORTE LONGITUDINAL A—A", "view-title")}` +
-    text(14, 146, "Perfil escalonado · prainha, fundos e paredes de degrau", "note") +
-    rect(x, top, wallDraw, bottom - top, "hatch") + rect(x + outerWidth - wallDraw, top, wallDraw, bottom - top, "hatch") + zoneRects +
+    text(14, 146, result.geometryModel?.hasSlopedFloor ? "Perfil contínuo com praia inclinada e transições" : "Perfil escalonado · prainha, fundos e paredes de degrau", "note") +
+    rect(x, top, wallDraw, bottom - top, "hatch") + rect(x + outerWidth - wallDraw, top, wallDraw, bottom - top, "hatch") + zoneGraphics +
     line(innerX, top + 1, innerX + innerWidth, top + 1, "water-line") +
     verticalDimension(x - 10, top, top + maxDepth * verticalScale, x, mm(maxDepth)) +
     horizontalDimension(innerX, innerX + innerWidth, bottom + 10, bottom, mm(length)) +
@@ -196,7 +209,7 @@ function titleBlock(project: ProjectRecord, revision: RevisionRecord): string {
   const height = 64;
   const date = new Date(revision.createdAt).toLocaleDateString("pt-BR", { timeZone: "UTC" });
   return `<g id="carimbo">${rect(x, y, width, height, "title-border")}` +
-    text(x + 5, y + 10, "POOLSTRUCT", "brand-text") + text(x + 5, y + 16, "PRÉ-DIMENSIONAMENTO · GEOMETRIA ESCALONADA", "table-header") +
+    text(x + 5, y + 10, "POOLSTRUCT", "brand-text") + text(x + 5, y + 16, "PRÉ-DIMENSIONAMENTO · PRAIA / GEOMETRIA ESCALONADA", "table-header") +
     line(x, y + 21, x + width, y + 21) + text(x + 4, y + 29, "PROJETO", "meta-label") + text(x + 28, y + 29, project.name, "meta-value") +
     text(x + 4, y + 36, "LOCAL", "meta-label") + text(x + 28, y + 36, project.location || "Não informado", "meta-value") +
     line(x, y + 41, x + width, y + 41) + line(x + 72, y + 41, x + 72, y + height) + line(x + 118, y + 41, x + 118, y + height) +
@@ -208,12 +221,12 @@ function titleBlock(project: ProjectRecord, revision: RevisionRecord): string {
 export function buildTechnicalDrawingSvg(project: ProjectRecord, revision: RevisionRecord): string {
   const { input, result } = revision;
   return `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<svg xmlns="http://www.w3.org/2000/svg" width="420mm" height="297mm" viewBox="0 0 420 297" role="img" data-poolstruct-drawing="phase-geometry-2.0.0">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="420mm" height="297mm" viewBox="0 0 420 297" role="img" data-poolstruct-drawing="phase-geometry-2.1.0">` +
     `<title>Prancha estrutural ${escapeXml(project.name)} R${revision.revisionNumber}</title>` +
     `<defs><marker id="arrow" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto-start-reverse"><path d="M0,0 L4,2 L0,4 Z" fill="#183231"/></marker><marker id="section" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#0c7772"/></marker><pattern id="concrete-pattern" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0 5 L5 0" stroke="#aab9b7" stroke-width=".25"/></pattern><pattern id="masonry-pattern" width="12" height="6" patternUnits="userSpaceOnUse"><path d="M0 0H12M0 6H12M0 0V6M6 0V6" stroke="#b8c4c2" stroke-width=".25"/></pattern></defs>` +
     `<style>svg{background:#fff;font-family:Arial,sans-serif}.sheet-border,.title-border,.table-border{fill:none;stroke:#183231;stroke-width:.65}.thin,.extension{stroke:#183231;stroke-width:.35;fill:none}.extension{stroke-width:.2}.dimension{stroke:#183231;stroke-width:.3}.view-title{font-size:4px;font-weight:700;fill:#0d3432}.note{font-size:2.5px;fill:#667c79}.label,.callout,.level{font-size:2.8px;fill:#183231}.callout{font-size:2.55px;font-weight:700}.dimension-text,.section-text{font-size:2.7px;fill:#183231}.section-text{font-size:3.4px;font-weight:700;fill:#0c7772}.concrete{fill:#e6edeb;stroke:#183231;stroke-width:.65}.hatch{fill:url(#concrete-pattern);stroke:#183231;stroke-width:.55}.masonry{fill:url(#masonry-pattern);stroke:#183231;stroke-width:.55}.channel-fill{fill:#e6c56a;fill-opacity:.55}.block-joint{stroke:#607b78;stroke-width:.25}.water{fill:#d8f1f5;stroke:#2b91aa;stroke-width:.3}.water-line{stroke:#168aa5;stroke-width:.7}.rebar{stroke:#d28a14;stroke-width:.45}.section-line{stroke:#0c7772;stroke-width:.45;stroke-dasharray:5 2}.step-line{stroke:#9b2923;stroke-width:.7;stroke-dasharray:2 1}.step-wall{fill:#efd0c7;stroke:#9b2923;stroke-width:.5}.zone-label,.zone-section-label{font-size:2.8px;font-weight:700;fill:#0d3432}.zone-note,.tiny{font-size:2.2px;fill:#526966}.table-text{font-size:2.35px;fill:#183231}.table-header,.meta-label{font-size:2.2px;font-weight:700;fill:#526966}.brand-text{font-size:5.5px;font-weight:800;fill:#0c7772}.meta-value{font-size:3px;fill:#183231}.meta-strong{font-size:3.2px;font-weight:700;fill:#183231}.warning{font-size:3px;font-weight:700;fill:#9b2923}</style>` +
     rect(8, 8, 404, 281, "sheet-border") + planView(input, result) + sectionView(input, result) + wallElevation(input, result) + reinforcementSchedule(result) + titleBlock(project, revision) +
-    text(14, 282, "PRÉ-DIMENSIONAMENTO ACADÊMICO — NÃO EXECUTAR SEM REVISÃO E RESPONSABILIDADE TÉCNICA", "warning") +
+    text(14, 282, "PRÉ-DIMENSIONAMENTO — NÃO EXECUTAR SEM REVISÃO E RESPONSABILIDADE TÉCNICA", "warning") +
     text(14, 287, `Motor ${result.engineVersion} · Perfil ${result.profileId} v${result.profileVersion} · Status ${result.overallStatus}`, "note") + `</svg>`;
 }
 

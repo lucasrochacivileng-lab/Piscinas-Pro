@@ -57,7 +57,7 @@ const input = {
 describe("integrated design", () => {
   it("usa o perfil normativo e injeta solo derivado no cálculo estrutural", () => {
     const result = runIntegratedDesign(input);
-    expect(result.integrationVersion).toBe("geotech-normative-1.0.0");
+    expect(result.integrationVersion).toBe("geotech-normative-1.1.0");
     expect(result.normativeProfile.sourceKind).toBe("normative");
     expect(result.geotechnical.wallSoil.nspt).toBe(18);
     expect(result.masonryMaterials.prismEfficiency).toBeCloseTo(0.65);
