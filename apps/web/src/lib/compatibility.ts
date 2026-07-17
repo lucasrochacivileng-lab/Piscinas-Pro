@@ -24,18 +24,36 @@ type LegacyCompatibleInput = Partial<Omit<
 const finiteOr = (value: number | undefined, fallback: number): number =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
+const normalizeZone = (zone: PoolDepthZoneInput): PoolDepthZoneInput => {
+  const startWaterDepthMm = finiteOr(zone.startWaterDepthMm, zone.waterDepthMm);
+  const endWaterDepthMm = finiteOr(zone.endWaterDepthMm, zone.waterDepthMm);
+  const sloped = Math.abs(startWaterDepthMm - endWaterDepthMm) > 1;
+  return {
+    ...zone,
+    floorProfile: zone.floorProfile ?? (sloped ? "SLOPED" : "HORIZONTAL"),
+    startWaterDepthMm,
+    endWaterDepthMm,
+    waterDepthMm: Math.max(startWaterDepthMm, endWaterDepthMm)
+  };
+};
+
 const normalizeDepthZones = (
   geometry: LegacyCompatibleInput["geometry"],
   internalLengthMm: number,
   waterDepthMm: number
 ): readonly PoolDepthZoneInput[] => {
-  if (geometry?.depthZones && geometry.depthZones.length > 0) return geometry.depthZones;
+  if (geometry?.depthZones && geometry.depthZones.length > 0) {
+    return geometry.depthZones.map(normalizeZone);
+  }
   return [{
     id: "main",
     label: "Fundo principal",
     kind: "MAIN",
     lengthMm: internalLengthMm,
-    waterDepthMm
+    waterDepthMm,
+    floorProfile: "HORIZONTAL",
+    startWaterDepthMm: waterDepthMm,
+    endWaterDepthMm: waterDepthMm
   }];
 };
 
@@ -63,10 +81,12 @@ export function normalizeIntegratedDesignInput(value: unknown): IntegratedDesign
     geometryCandidate.internalLengthMm,
     DEFAULT_DESIGN_INPUT.geometry.internalLengthMm
   );
-  const waterDepthMm = finiteOr(
+  const legacyWaterDepthMm = finiteOr(
     geometryCandidate.waterDepthMm,
     DEFAULT_DESIGN_INPUT.geometry.waterDepthMm
   );
+  const depthZones = normalizeDepthZones(geometryCandidate, internalLengthMm, legacyWaterDepthMm);
+  const waterDepthMm = Math.max(...depthZones.map((zone) => zone.waterDepthMm));
   const slabThicknessMm = finiteOr(
     geometryCandidate.slabThicknessMm,
     DEFAULT_DESIGN_INPUT.geometry.slabThicknessMm
@@ -85,7 +105,7 @@ export function normalizeIntegratedDesignInput(value: unknown): IntegratedDesign
       internalLengthMm,
       waterDepthMm,
       slabThicknessMm,
-      depthZones: normalizeDepthZones(geometryCandidate, internalLengthMm, waterDepthMm)
+      depthZones
     },
     masonry: {
       ...DEFAULT_DESIGN_INPUT.masonry!,
