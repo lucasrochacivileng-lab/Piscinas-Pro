@@ -1,7 +1,14 @@
-import { runIntegratedDesign, type IntegratedDesignInput } from "@poolstruct/calculation-engine";
+import {
+  createEmptyCadGeometryDocument,
+  runIntegratedDesign,
+  type CadGeometryDocument,
+  type IntegratedDesignInput,
+  type PoolDepthZoneInput
+} from "@poolstruct/calculation-engine";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./auth/auth-context";
 import { AuthScreen } from "./components/AuthScreen";
+import { CadGeometryPanel } from "./components/CadGeometryPanel";
 import { CalculationEditor } from "./components/CalculationEditor";
 import { DrawingPanel } from "./components/DrawingPanel";
 import { GeotechnicalPanel } from "./components/GeotechnicalPanel";
@@ -9,6 +16,7 @@ import { MasonryPanel } from "./components/MasonryPanel";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ResultDashboard } from "./components/ResultDashboard";
 import { RevisionHistory } from "./components/RevisionHistory";
+import { loadCadDraft } from "./lib/cad";
 import {
   isIntegratedDesignResult,
   normalizeIntegratedDesignInput,
@@ -24,6 +32,14 @@ interface ErrorNotice {
   readonly message: string;
   readonly correlationId: string;
 }
+
+const EMPTY_CAD = createEmptyCadGeometryDocument();
+
+const zoneDepth = (zone: PoolDepthZoneInput): number => Math.max(
+  zone.waterDepthMm,
+  zone.startWaterDepthMm ?? zone.waterDepthMm,
+  zone.endWaterDepthMm ?? zone.waterDepthMm
+);
 
 export function App() {
   const { user, loading, localMode, signOut } = useAuth();
@@ -58,15 +74,17 @@ export function App() {
   }, [handleFailure, refreshProjects]);
 
   async function selectProject(project: ProjectRecord) {
-    if (!repository) return;
+    if (!repository || !user) return;
     setActiveProject(project);
     setError(null);
     try {
       const records = await repository.listRevisions(project.id);
       setRevisions(records);
       const latest = records[0];
+      const normalized = normalizeIntegratedDesignInput(latest?.input ?? DEFAULT_DESIGN_INPUT);
+      const draft = loadCadDraft(user.id, project.id);
       setActiveRevision(latest ?? null);
-      setEditorInput(normalizeIntegratedDesignInput(latest?.input ?? DEFAULT_DESIGN_INPUT));
+      setEditorInput({ ...normalized, cadGeometry: draft ?? normalized.cadGeometry ?? createEmptyCadGeometryDocument() });
       setResult(latest?.result ?? null);
     } catch (reason) {
       await handleFailure("repository_error", "revision_list_failed", reason, "Falha ao carregar revisões.");
@@ -93,6 +111,7 @@ export function App() {
         setRevisions([]);
         setActiveRevision(null);
         setResult(null);
+        setEditorInput(DEFAULT_DESIGN_INPUT);
       }
       await refreshProjects();
     } catch (reason) {
@@ -122,10 +141,60 @@ export function App() {
   }
 
   function openRevision(revision: RevisionRecord) {
+    const normalized = normalizeIntegratedDesignInput(revision.input);
     setActiveRevision(revision);
-    setEditorInput(normalizeIntegratedDesignInput(revision.input));
+    setEditorInput(normalized);
     setResult(revision.result);
   }
+
+  const syncEditorInput = useCallback((input: IntegratedDesignInput) => setEditorInput(input), []);
+  const updateCadGeometry = useCallback((cadGeometry: CadGeometryDocument) => {
+    setEditorInput((current) => ({ ...current, cadGeometry }));
+  }, []);
+
+  const applyCadEnvelope = useCallback((cad: { lengthMm: number; widthMm: number; maximumDepthMm?: number }) => {
+    setEditorInput((current) => {
+      const targetLengthMm = Math.max(cad.lengthMm, cad.widthMm);
+      const targetWidthMm = Math.min(cad.lengthMm, cad.widthMm);
+      const existingZones = current.geometry.depthZones && current.geometry.depthZones.length > 0
+        ? [...current.geometry.depthZones]
+        : [{
+          id: "main", label: "Fundo principal", kind: "MAIN" as const,
+          lengthMm: current.geometry.internalLengthMm,
+          waterDepthMm: current.geometry.waterDepthMm,
+          floorProfile: "HORIZONTAL" as const,
+          startWaterDepthMm: current.geometry.waterDepthMm,
+          endWaterDepthMm: current.geometry.waterDepthMm
+        }];
+      const total = existingZones.reduce((sum, zone) => sum + zone.lengthMm, 0);
+      const factor = total > 0 ? targetLengthMm / total : 1;
+      const scaledZones = existingZones.map((zone) => ({ ...zone, lengthMm: Math.max(100, Math.round(zone.lengthMm * factor)) }));
+      const scaledTotal = scaledZones.reduce((sum, zone) => sum + zone.lengthMm, 0);
+      const last = scaledZones.at(-1);
+      if (last) scaledZones[scaledZones.length - 1] = { ...last, lengthMm: Math.max(100, last.lengthMm + targetLengthMm - scaledTotal) };
+      if (scaledZones.length === 1 && cad.maximumDepthMm !== undefined) {
+        const only = scaledZones[0]!;
+        scaledZones[0] = {
+          ...only,
+          waterDepthMm: cad.maximumDepthMm,
+          startWaterDepthMm: cad.maximumDepthMm,
+          endWaterDepthMm: cad.maximumDepthMm,
+          floorProfile: "HORIZONTAL"
+        };
+      }
+      const maximumDepthMm = Math.max(...scaledZones.map(zoneDepth));
+      return {
+        ...current,
+        geometry: {
+          ...current.geometry,
+          internalLengthMm: targetLengthMm,
+          internalWidthMm: targetWidthMm,
+          waterDepthMm: maximumDepthMm,
+          depthZones: scaledZones
+        }
+      };
+    });
+  }, []);
 
   if (loading) return <div className="loading-screen">Carregando ambiente seguro…</div>;
   if (!user) return <AuthScreen />;
@@ -152,9 +221,18 @@ export function App() {
           <p className="eyebrow">Ambiente de dimensionamento</p>
           <h1>Nenhum projeto aberto</h1>
           <p>Crie ou selecione um projeto no navegador à esquerda para carregar o modelo estrutural, geotécnico, normativo e as revisões imutáveis.</p>
-          <div className="welcome-features"><span>Motor determinístico</span><span>SPT por camadas</span><span>Flutuação global</span><span>Histórico SHA-256</span></div>
+          <div className="welcome-features"><span>Motor determinístico</span><span>CAD 2D calibrado</span><span>SPT por camadas</span><span>Histórico SHA-256</span></div>
         </div></section> : <>
           <section className="project-header"><div><h1>{activeProject.name}</h1><p>{activeProject.location || "Local não informado"}</p></div><span className="project-state">{activeProject.status === "calculated" ? "Calculado" : "Rascunho"}</span></section>
+          <CadGeometryPanel
+            key={activeProject.id}
+            ownerId={user.id}
+            projectId={activeProject.id}
+            projectName={activeProject.name}
+            document={editorInput.cadGeometry ?? EMPTY_CAD}
+            onChange={updateCadGeometry}
+            onApplyEnvelope={applyCadEnvelope}
+          />
           {activeRevision && <DrawingPanel project={activeProject} revision={activeRevision} />}
           {result && <ResultDashboard result={result} />}
           {result && isIntegratedDesignResult(result) && <GeotechnicalPanel result={result} />}
@@ -162,7 +240,7 @@ export function App() {
           {result?.masonry && <MasonryPanel masonry={result.masonry} />}
         </>}
       </main>
-      {activeProject && <aside className="props-panel"><CalculationEditor initialInput={editorInput} busy={busy} onCalculate={calculate} /></aside>}
+      {activeProject && <aside className="props-panel"><CalculationEditor initialInput={editorInput} busy={busy} onInputChange={syncEditorInput} onCalculate={calculate} /></aside>}
     </div>
     <footer className="statusbar">
       <span className="sb-accent">POOLSTRUCT</span>
