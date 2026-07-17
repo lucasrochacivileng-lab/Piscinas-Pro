@@ -27,7 +27,9 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run release:validate
       - run: npm test
-      - run: npm run check
+      - name: TypeScript check
+        shell: bash
+        run: set -o pipefail; npm run check 2>&1 | tee typecheck.log
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
@@ -37,6 +39,12 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 14
+      - uses: actions/upload-artifact@v5
+        if: ${{ !cancelled() }}
+        with:
+          name: typecheck-log
+          path: typecheck.log
+          retention-days: 2
 
   database:
     name: Migrations, lint and pgTAP
