@@ -9,6 +9,7 @@ export function ResultDashboard({ result }: { result: IntegratedDesignResult }) 
   const slabZones = result.slabZones ?? [];
   const geotechnical = result.geotechnical;
   const flotation = result.flotation;
+  const integratedMasonry = result.masonry && "mortarStrengthMPa" in result.masonry ? result.masonry : null;
   return <section className="results-panel">
     <div className="section-title"><div><p className="eyebrow">Último processamento</p><h2>Resultado estrutural</h2></div><StatusBadge status={result.overallStatus} /></div>
     <div className="metrics">
@@ -20,7 +21,7 @@ export function ResultDashboard({ result }: { result: IntegratedDesignResult }) 
 
     {(result.profileLabel || result.profileId) && <><h3>Perfil de cálculo</h3><div className="reinforcement-grid"><article>
       <h3>{result.profileLabel ?? result.profileId}</h3><p>Versão {result.profileVersion}</p><p>{result.profileSourceKind === "normative" ? "Base normativa" : "Base acadêmica"} · {result.profileStatus ?? "legado"}</p>
-    </article>{result.masonry && <article><h3>Sistema de alvenaria</h3><p>Bloco: {format(result.masonry.blockStrengthMPa, 1)} MPa</p><p>Argamassa / graute: {format(result.masonry.mortarStrengthMPa, 1)} / {format(result.masonry.groutStrengthMPa, 1)} MPa</p><p>Prisma: {format(result.masonry.prismStrengthMPa, 1)} MPa · eficiência {format(result.masonry.prismToBlockEfficiency, 2)}</p></article>}</div></>}
+    </article>{integratedMasonry && <article><h3>Sistema de alvenaria</h3><p>Bloco: {format(integratedMasonry.blockStrengthMPa, 1)} MPa</p><p>Argamassa / graute: {format(integratedMasonry.mortarStrengthMPa, 1)} / {format(integratedMasonry.groutStrengthMPa, 1)} MPa</p><p>Prisma: {format(integratedMasonry.prismStrengthMPa, 1)} MPa · eficiência {format(integratedMasonry.prismToBlockEfficiency, 2)}</p></article>}</div></>}
 
     {geotechnical && <><h3>Perfil SPT integrado</h3><div className="reinforcement-grid">
       {geotechnical.layers.map((layer) => <article key={layer.id}><h3>{layer.label}</h3><p>{format(layer.topDepthMm, 0)}–{format(layer.bottomDepthMm, 0)} mm · {layer.soilType}</p><p>NSPT {layer.nspt} · γsat {format(layer.saturatedUnitWeightKNM3, 1)} kN/m³</p><p>φ {format(layer.frictionAngleDegrees, 1)}° · σadm {format(layer.allowableBearingKPa, 0)} kPa</p></article>)}
