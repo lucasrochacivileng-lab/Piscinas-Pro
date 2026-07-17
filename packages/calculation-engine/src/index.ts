@@ -8,6 +8,28 @@ export {
   STRUCTURAL_PROFILE_REGISTRY
 } from "./profiles.js";
 export {
+  buildCadGeometryDxf,
+  cadDrawingDistance,
+  cadPathLengthDrawingUnits,
+  cadPathLengthMm,
+  calibrateCadGeometry,
+  createEmptyCadGeometryDocument,
+  measureCadGeometry,
+  sampleCadPath,
+  validateCadGeometry
+} from "./cad-geometry.js";
+export type {
+  CadBackgroundReference,
+  CadCalibration,
+  CadDepthMarker,
+  CadGeometryDocument,
+  CadGeometryMeasurements,
+  CadPath,
+  CadPathCurve,
+  CadPathRole,
+  CadPoint
+} from "./cad-geometry.js";
+export {
   findBlockWebRequirement,
   findClassCUseLimit,
   findNominalBlockFamily,
