@@ -4,6 +4,7 @@ import { App } from "./App";
 import { AuthProvider } from "./auth/AuthProvider";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import "./styles.css";
+import "./geotechnical.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode><AppErrorBoundary><AuthProvider><App /></AuthProvider></AppErrorBoundary></StrictMode>
