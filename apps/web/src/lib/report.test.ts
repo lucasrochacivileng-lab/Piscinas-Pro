@@ -22,6 +22,9 @@ describe("buildMemoryHtml", () => {
     expect(html).toContain("R2");
     expect(html).toContain("a".repeat(64));
     expect(html).toContain(result.engineVersion);
+    expect(html).toContain("Alvenaria estrutural e modulação");
+    expect(html).toContain(result.masonry!.family.label);
+    expect(html).toContain(`${result.masonry!.modulation.totalChannelBlocks}`);
     expect(html).not.toContain("Piscina <Norte>");
   });
 });

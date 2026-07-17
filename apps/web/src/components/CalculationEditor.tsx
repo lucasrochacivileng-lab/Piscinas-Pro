@@ -1,4 +1,8 @@
-import type { Phase1DesignInput } from "@poolstruct/calculation-engine";
+import {
+  DEFAULT_BLOCK_FAMILIES,
+  DEFAULT_MASONRY_SPECIFICATION,
+  type Phase1DesignInput
+} from "@poolstruct/calculation-engine";
 import { useEffect, useState, type FormEvent } from "react";
 
 interface Props {
@@ -25,7 +29,12 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
   useEffect(() => setInput(initialInput), [initialInput]);
   const geometry = input.geometry;
   const setGeometry = (field: keyof Phase1DesignInput["geometry"], value: number) => setInput((current) => ({ ...current, geometry: { ...current.geometry, [field]: value } }));
-  const setValue = (field: Exclude<keyof Phase1DesignInput, "geometry">, value: number) => setInput((current) => ({ ...current, [field]: value }));
+  const masonry = input.masonry ?? DEFAULT_MASONRY_SPECIFICATION;
+  const setValue = (field: Exclude<keyof Phase1DesignInput, "geometry" | "masonry">, value: number) => setInput((current) => ({ ...current, [field]: value }));
+  const setMasonry = (field: keyof typeof masonry, value: string | number) => setInput((current) => ({
+    ...current,
+    masonry: { ...(current.masonry ?? DEFAULT_MASONRY_SPECIFICATION), [field]: value }
+  }));
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -41,6 +50,21 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
       <NumberField label="Espessura da parede" value={geometry.wallThicknessMm} unit="mm" onChange={(value) => setGeometry("wallThicknessMm", value)} />
       <NumberField label="Espessura da laje" value={geometry.slabThicknessMm} unit="mm" onChange={(value) => setGeometry("slabThicknessMm", value)} />
     </div></fieldset>
+    <fieldset><legend>Alvenaria estrutural e modulação</legend><div className="block-specification">
+      <label className="select-field"><span>Família de blocos</span><select value={masonry.blockFamilyId} onChange={(event) => setMasonry("blockFamilyId", event.currentTarget.value)}>
+        {DEFAULT_BLOCK_FAMILIES.map((family) => <option value={family.id} key={family.id}>{family.label}</option>)}
+      </select></label>
+      <NumberField label="Graute vertical" value={masonry.verticalGroutSpacingMm} unit="mm" step={50} min={100} onChange={(value) => setMasonry("verticalGroutSpacingMm", value)} />
+      <NumberField label="Cinta intermediária" value={masonry.bondBeamCourseSpacing} unit="fiadas" min={0} onChange={(value) => setMasonry("bondBeamCourseSpacing", value)} />
+    </div>
+    <div className="block-family-preview">{DEFAULT_BLOCK_FAMILIES.filter((family) => family.id === masonry.blockFamilyId).map((family) => <div key={family.id}>
+      <strong>{family.label}</strong>
+      <span>largura {family.nominalWidthMm} mm · fiada {family.courseHeightMm} mm · junta {family.jointThicknessMm} mm</span>
+      <span>{family.units.map((unit) => unit.label).join(" · ")}</span>
+      {Math.abs(geometry.wallThicknessMm - family.nominalWidthMm) > 1 && <small>Espessura incompatível: ajuste a parede para {family.nominalWidthMm} mm ou escolha outra família.</small>}
+      <small>Família acadêmica: os dados resistentes do fabricante ainda precisam ser confirmados.</small>
+    </div>)}</div>
+    </fieldset>
     <fieldset><legend>Solo e carregamentos</legend><div className="form-grid">
       <NumberField label="Peso específico do solo saturado" value={input.saturatedSoilUnitWeightKNM3} unit="kN/m³" step={0.1} onChange={(value) => setValue("saturatedSoilUnitWeightKNM3", value)} />
       <NumberField label="Ângulo de atrito" value={input.soilFrictionAngleDegrees} unit="graus" step={0.1} onChange={(value) => setValue("soilFrictionAngleDegrees", value)} />

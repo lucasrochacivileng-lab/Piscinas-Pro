@@ -36,6 +36,9 @@ test("cria projeto, calcula, persiste R1 e exporta a memória", async ({ page })
 
   await expect(page.getByText("Calculado", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Resultado estrutural" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Modulação dos blocos" })).toBeVisible();
+  await expect(page.getByText("Família 39 x 19 x 19 (módulo 200 mm)", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/canaletas/).first()).toBeVisible();
   await expect(page.getByText("44.800 L", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /R1/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Prancha estrutural" })).toBeVisible();

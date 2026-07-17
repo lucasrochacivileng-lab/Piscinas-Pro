@@ -79,10 +79,13 @@ export type {
 } from "./modulation.js";
 export { runPhase1Design } from "./phase1.js";
 export type {
+  MasonrySpecificationInput,
+  Phase1MasonryResult,
   Phase1DesignInput,
   Phase1DesignResult,
   Phase1WallResult
 } from "./phase1.js";
+export { DEFAULT_MASONRY_SPECIFICATION } from "./phase1.js";
 export { clampedPlateCoefficients, designClampedPoolSlab } from "./slab-design.js";
 export type {
   PlateCoefficients,

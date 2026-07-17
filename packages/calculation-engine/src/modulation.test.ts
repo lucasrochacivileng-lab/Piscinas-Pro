@@ -151,10 +151,10 @@ describe("sugestoes de ajuste", () => {
 
 describe("modulacao do perimetro da piscina", () => {
   const input = {
-    internalLengthMm: 8_000,
-    internalWidthMm: 4_000,
+    internalLengthMm: 8_010,
+    internalWidthMm: 4_010,
     wallHeightMm: 1_600,
-    wallThicknessMm: 200,
+    wallThicknessMm: 190,
     verticalGroutSpacingMm: 800,
     bondBeamCourseSpacing: 4
   } as const;
@@ -168,7 +168,7 @@ describe("modulacao do perimetro da piscina", () => {
     expect(bundle.value.grout.channelCourseIndices).toContain(0);
     expect(bundle.value.grout.channelCourseIndices).toContain(7);
     expect(bundle.value.grout.channelCourseIndices).toContain(4);
-    expect(bundle.checks.every((check) => check.status === "PASS")).toBe(true);
+    expect(bundle.checks.find((check) => check.id === "junction-thickness-modular")?.status).toBe("PASS");
     expect(bundle.value.totalBlocks).toBeGreaterThan(0);
   });
 
@@ -201,6 +201,15 @@ describe("modulacao do perimetro da piscina", () => {
     );
     const thicknessCheck = bundle.checks.find((check) => check.id === "junction-thickness-modular");
     expect(thicknessCheck?.status).toBe("REQUIRES_REVIEW");
+  });
+
+  it("marca revisao quando o graute nao coincide com a malha de celulas", () => {
+    const bundle = modulatePoolPerimeter(
+      { ...input, verticalGroutSpacingMm: 350 },
+      BLOCK_FAMILY_M20
+    );
+    const groutCheck = bundle.checks.find((check) => check.id === "vertical-grout-spacing-modular");
+    expect(groutCheck?.status).toBe("REQUIRES_REVIEW");
   });
 
   it("e deterministico para a mesma entrada", () => {

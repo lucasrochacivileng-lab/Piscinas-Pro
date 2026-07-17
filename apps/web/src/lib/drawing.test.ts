@@ -24,6 +24,8 @@ describe("buildTechnicalDrawingSvg", () => {
     expect(first).toContain('id="planta"');
     expect(first).toContain('id="corte-a-a"');
     expect(first).toContain('id="elevacao-parede-longa"');
+    expect(first).toContain('class="channel-fill"');
+    expect(first).toContain(result.masonry!.family.label);
     expect(first).toContain('id="quadro-armaduras"');
   });
 
@@ -34,6 +36,7 @@ describe("buildTechnicalDrawingSvg", () => {
     expect(svg).toContain("4.000");
     expect(svg).toContain(`Ø${result.longWall.design.parallel.layout.diameterMm}`);
     expect(svg).toContain(`c/${result.slab.bottomX.layout.spacingMm} mm`);
+    expect(svg).toContain(`${result.masonry!.modulation.courseCount} fiadas`);
     expect(svg).not.toMatch(/NaN|undefined|Infinity/);
   });
 

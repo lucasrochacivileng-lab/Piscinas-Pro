@@ -6,6 +6,12 @@ import { validateStructuralProfile } from "./engineering.js";
 import { calculateHydrostaticAction } from "./hydrostatic.js";
 import { calculatePoolLoadCases, type PoolLoadCasesResult } from "./load-cases.js";
 import { designMasonryPanel, type MasonryDesignResult } from "./masonry-design.js";
+import {
+  DEFAULT_BLOCK_FAMILIES,
+  modulatePoolPerimeter,
+  type BlockFamily,
+  type PoolModulationResult
+} from "./modulation.js";
 import { designClampedPoolSlab, type SlabDesignResult } from "./slab-design.js";
 import type {
   HydrostaticResult,
@@ -32,6 +38,27 @@ export interface Phase1DesignInput {
   readonly slabReinforcementCoverMm: number;
   readonly slabBarDiameterMm: number;
   readonly minimumSlabSteelRatio: number;
+  readonly masonry?: MasonrySpecificationInput;
+}
+
+export interface MasonrySpecificationInput {
+  readonly blockFamilyId: string;
+  readonly verticalGroutSpacingMm: number;
+  readonly bondBeamCourseSpacing: number;
+}
+
+export const DEFAULT_MASONRY_SPECIFICATION: MasonrySpecificationInput = Object.freeze({
+  blockFamilyId: "academic-block-family-m20",
+  verticalGroutSpacingMm: 200,
+  bondBeamCourseSpacing: 4
+});
+
+export interface Phase1MasonryResult {
+  readonly family: BlockFamily;
+  readonly modulation: PoolModulationResult;
+  readonly checks: readonly EngineeringCheck[];
+  readonly trace: ReturnType<typeof modulatePoolPerimeter>["trace"];
+  readonly warnings: readonly string[];
 }
 
 export interface Phase1WallResult {
@@ -41,7 +68,7 @@ export interface Phase1WallResult {
 }
 
 export interface Phase1DesignResult {
-  readonly engineVersion: "phase1-1.0.0";
+  readonly engineVersion: "phase1-1.1.0";
   readonly profileId: string;
   readonly profileVersion: string;
   readonly hydrostatic: HydrostaticResult;
@@ -49,6 +76,7 @@ export interface Phase1DesignResult {
   readonly longWall: Phase1WallResult;
   readonly shortWall: Phase1WallResult;
   readonly slab: SlabDesignResult;
+  readonly masonry?: Phase1MasonryResult;
   readonly checks: readonly EngineeringCheck[];
   readonly overallStatus: "PASS" | "FAIL" | "REQUIRES_REVIEW";
   readonly warnings: readonly string[];
@@ -143,11 +171,51 @@ export function runPhase1Design(
     downwardDesignLoadKPa: loadCasesBundle.value.fullPoolDownwardDesignKPa,
     upliftDesignLoadKPa: loadCasesBundle.value.emptyPoolNetUpliftDesignKPa
   }, profile);
+  const masonrySpecification = input.masonry ?? DEFAULT_MASONRY_SPECIFICATION;
+  const family = DEFAULT_BLOCK_FAMILIES.find(
+    (candidate) => candidate.id === masonrySpecification.blockFamilyId
+  );
+  if (!family) {
+    throw new RangeError(`Familia de blocos desconhecida: ${masonrySpecification.blockFamilyId}.`);
+  }
+  const modulationBundle = modulatePoolPerimeter({
+    internalLengthMm: input.geometry.internalLengthMm,
+    internalWidthMm: input.geometry.internalWidthMm,
+    wallHeightMm: input.geometry.waterDepthMm,
+    wallThicknessMm: input.geometry.wallThicknessMm,
+    verticalGroutSpacingMm: masonrySpecification.verticalGroutSpacingMm,
+    bondBeamCourseSpacing: masonrySpecification.bondBeamCourseSpacing
+  }, family);
+  const certificationCheck: EngineeringCheck = {
+    id: "block-family-certification",
+    status: family.status === "reviewed" ? "PASS" : "REQUIRES_REVIEW",
+    demand: family.status === "reviewed" ? 1 : 0,
+    resistance: 1,
+    unit: "certification",
+    message: family.status === "reviewed"
+      ? "Familia de blocos possui dados tecnicos revisados."
+      : "Familia academica: confirmar fabricante, fbk, prisma, argamassa e graute antes do uso executivo."
+  };
+  const requiredVerticalBarSpacingMm = Math.min(
+    longWall.design.perpendicular.layout.spacingMm,
+    shortWall.design.perpendicular.layout.spacingMm
+  );
+  const groutSpacingCheck: EngineeringCheck = {
+    id: "grout-spacing-covers-vertical-bars",
+    status: masonrySpecification.verticalGroutSpacingMm <= requiredVerticalBarSpacingMm ? "PASS" : "FAIL",
+    demand: masonrySpecification.verticalGroutSpacingMm,
+    resistance: requiredVerticalBarSpacingMm,
+    unit: "mm",
+    message: "Espaçamento das células grauteadas atende todas as barras verticais calculadas."
+  };
   const checks = [
     ...loadCasesBundle.checks,
     ...longWall.checks,
     ...shortWall.checks,
-    ...slabBundle.checks
+    ...slabBundle.checks,
+    ...modulationBundle.checks,
+    groutSpacingCheck,
+    certificationCheck
   ];
   const overallStatus = checks.some((check) => check.governing !== false && check.status === "FAIL")
     ? "FAIL"
@@ -156,7 +224,7 @@ export function runPhase1Design(
       : "PASS";
 
   return {
-    engineVersion: "phase1-1.0.0",
+    engineVersion: "phase1-1.1.0",
     profileId: profile.id,
     profileVersion: profile.version,
     hydrostatic: hydrostatic.value,
@@ -164,11 +232,19 @@ export function runPhase1Design(
     longWall,
     shortWall,
     slab: slabBundle.value,
+    masonry: {
+      family,
+      modulation: modulationBundle.value,
+      checks: [...modulationBundle.checks, groutSpacingCheck, certificationCheck],
+      trace: modulationBundle.trace,
+      warnings: modulationBundle.warnings
+    },
     checks,
     overallStatus,
     warnings: [
       ...loadCasesBundle.warnings,
       ...slabBundle.warnings,
+      ...modulationBundle.warnings,
       "Resultado de Fase 1 para pre-dimensionamento; revisao de engenheiro permanece obrigatoria."
     ]
   };

@@ -88,7 +88,7 @@ Os desenhos sao documentos de pre-dimensionamento academico. Detalhes de ancorag
 
 ## Fase 6 - Modulacao
 
-Status: concluida em 13/07/2026 na versao `0.7.0`.
+Status: integrada ao produto em 16/07/2026 na versao `0.8.0`.
 
 - [x] familias de blocos academicas com coordenacao modular e canaleta;
 - [x] fiadas com amarracao em contra-fiada e deslocamento de um modulo;
@@ -96,5 +96,9 @@ Status: concluida em 13/07/2026 na versao `0.7.0`.
 - [x] graute vertical por espacamento e fiadas de canaleta na base e no topo;
 - [x] sugestoes de ajuste para paredes fora da modulacao;
 - [x] testes do algoritmo cobrindo fiadas, paredes, encontros e determinismo.
+- [x] escolha da familia no editor e persistencia por revisao;
+- [x] painel visual com blocos inteiros, meios blocos, canaletas e celulas grauteadas;
+- [x] verificacao da largura da parede, fechamento modular e malha de graute;
+- [x] elevacao modulada na prancha e quantitativos na memoria de calculo.
 
 A modulacao usa o metodo de eixo e serve para pre-dimensionamento academico. Amarracao detalhada, ancoragem e emenda das armaduras, cantos especiais, juntas e impermeabilizacao permanecem sob responsabilidade de engenheiro habilitado.

@@ -27,7 +27,7 @@ export interface ExportBundle {
 export function buildExportBundle(
   project: ProjectRecord,
   revision: RevisionRecord,
-  family: BlockFamily = BLOCK_FAMILY_M20,
+  family: BlockFamily = revision.result.masonry?.family ?? BLOCK_FAMILY_M20,
   priceTable: PriceTable = DEFAULT_PRICE_TABLE
 ): ExportBundle {
   const quantities = takeoffPoolQuantities(revision.input.geometry, revision.result, family);

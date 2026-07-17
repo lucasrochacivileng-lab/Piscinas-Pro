@@ -22,5 +22,10 @@ export const DEFAULT_DESIGN_INPUT: Phase1DesignInput = {
   flexuralTensileStrengthPerpendicularMPa: 0.4,
   slabReinforcementCoverMm: 30,
   slabBarDiameterMm: 10,
-  minimumSlabSteelRatio: 0.0015
+  minimumSlabSteelRatio: 0.0015,
+  masonry: {
+    blockFamilyId: "academic-block-family-m20",
+    verticalGroutSpacingMm: 200,
+    bondBeamCourseSpacing: 4
+  }
 };

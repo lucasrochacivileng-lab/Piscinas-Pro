@@ -4,6 +4,7 @@ import { useAuth } from "./auth/auth-context";
 import { AuthScreen } from "./components/AuthScreen";
 import { CalculationEditor } from "./components/CalculationEditor";
 import { DrawingPanel } from "./components/DrawingPanel";
+import { MasonryPanel } from "./components/MasonryPanel";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ResultDashboard } from "./components/ResultDashboard";
 import { RevisionHistory } from "./components/RevisionHistory";
@@ -149,6 +150,7 @@ export function App() {
           <section className="project-header"><div><h1>{activeProject.name}</h1><p>{activeProject.location || "Local não informado"}</p></div><span className="project-state">{activeProject.status === "calculated" ? "Calculado" : "Rascunho"}</span></section>
           {activeRevision && <DrawingPanel project={activeProject} revision={activeRevision} />}
           {result && <ResultDashboard result={result} />}
+          {result?.masonry && <MasonryPanel masonry={result.masonry} />}
         </>}
       </main>
       {activeProject && <aside className="props-panel"><CalculationEditor initialInput={editorInput} busy={busy} onCalculate={calculate} /></aside>}

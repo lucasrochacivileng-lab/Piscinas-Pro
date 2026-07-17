@@ -1,7 +1,7 @@
 # Aceite da Fase 1
 
 Versao: `0.2.0`
-Motor: `phase1-1.0.0`
+Motor: `phase1-1.1.0`
 Data: 13/07/2026
 
 ## Entregas aceitas

@@ -27,7 +27,8 @@ export function buildProjectJson(bundle: ExportBundle): string {
     modulation: {
       familyId: family.id,
       familyVersion: family.version,
-      moduleMm: family.moduleMm
+      moduleMm: family.moduleMm,
+      result: revision.result.masonry?.modulation ?? null
     },
     quantities: {
       totalBlocks: quantities.totalBlocks,

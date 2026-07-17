@@ -61,6 +61,26 @@ function reinforcementLines(
   }).join("");
 }
 
+function masonryCourses(x: number, y: number, width: number, height: number, result: Phase1DesignResult): string {
+  const masonry = result.masonry;
+  if (!masonry) return "";
+  const { modulation } = masonry;
+  const rowHeight = height / modulation.courseCount;
+  const channelSet = new Set(modulation.grout.channelCourseIndices);
+  return Array.from({ length: modulation.courseCount }, (_, index) => {
+    const rowY = y + height - (index + 1) * rowHeight;
+    const course = index % 2 === 0 ? modulation.longWall.evenCourse : modulation.longWall.oddCourse;
+    const channel = channelSet.has(index)
+      ? `<rect class="channel-fill" x="${x}" y="${rowY}" width="${width}" height="${rowHeight}"/>`
+      : "";
+    const joints = course.placements.slice(1).map((placement) => {
+      const jointX = x + width * placement.startModule / course.moduleCount;
+      return line(jointX, rowY, jointX, rowY + rowHeight, "block-joint");
+    }).join("");
+    return channel + line(x, rowY, x + width, rowY, "block-joint") + joints;
+  }).join("");
+}
+
 function planView(input: Phase1DesignInput, result: Phase1DesignResult): string {
   const { internalLengthMm: length, internalWidthMm: width, wallThicknessMm: wall } = input.geometry;
   const outerLength = length + 2 * wall;
@@ -137,9 +157,11 @@ function wallElevation(input: Phase1DesignInput, result: Phase1DesignResult): st
   const y = 32;
   const horizontal = result.longWall.design.parallel.layout;
   const vertical = result.longWall.design.perpendicular.layout;
+  const masonry = result.masonry;
   return `<g id="elevacao-parede-longa" data-view="wall-elevation">${text(248, 18, "ELEVAÇÃO — PAREDE LONGA", "view-title")}` +
-    text(248, 23, "Armaduras esquemáticas · barras em células grauteadas", "note") +
+    text(248, 23, masonry ? `${masonry.family.label} · ${masonry.modulation.courseCount} fiadas · ${masonry.modulation.totalChannelBlocks} canaletas no perímetro` : "Armaduras esquemáticas · barras em células grauteadas", "note") +
     `<rect class="masonry" x="${x}" y="${y}" width="${width}" height="${height}"/>` +
+    masonryCourses(x, y, width, height, result) +
     reinforcementLines(x + 2, y + 2, width - 4, height - 4, "horizontal", depth, horizontal.spacingMm) +
     reinforcementLines(x + 2, y + 2, width - 4, height - 4, "vertical", length, vertical.spacingMm) +
     horizontalDimension(x, x + width, y + height + 9, y + height, `${mm(length)}`) +
@@ -199,14 +221,14 @@ function titleBlock(project: ProjectRecord, revision: RevisionRecord): string {
 export function buildTechnicalDrawingSvg(project: ProjectRecord, revision: RevisionRecord): string {
   const { input, result } = revision;
   return `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<svg xmlns="http://www.w3.org/2000/svg" width="420mm" height="297mm" viewBox="0 0 420 297" role="img" aria-labelledby="sheet-title sheet-description" data-poolstruct-drawing="phase5-1.0.0">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="420mm" height="297mm" viewBox="0 0 420 297" role="img" aria-labelledby="sheet-title sheet-description" data-poolstruct-drawing="phase6-1.0.0">` +
     `<title id="sheet-title">Prancha estrutural ${escapeXml(project.name)} R${revision.revisionNumber}</title>` +
-    `<desc id="sheet-description">Planta, corte, elevação e quadro de armaduras calculados pelo POOLSTRUCT.</desc>` +
+    `<desc id="sheet-description">Planta, corte, elevação modulada de blocos, canaletas, graute e quadro de armaduras calculados pelo POOLSTRUCT.</desc>` +
     `<defs><marker id="arrow" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto-start-reverse"><path d="M0,0 L4,2 L0,4 Z" fill="#183231"/></marker>` +
     `<marker id="section" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#0c7772"/></marker>` +
     `<pattern id="concrete-pattern" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0 5 L5 0" stroke="#aab9b7" stroke-width=".25"/></pattern>` +
     `<pattern id="masonry-pattern" width="12" height="6" patternUnits="userSpaceOnUse"><path d="M0 0H12M0 6H12M0 0V6M6 0V6" stroke="#b8c4c2" stroke-width=".25"/></pattern></defs>` +
-    `<style>svg{background:#fff;font-family:Arial,sans-serif}.sheet-border,.title-border,.table-border{fill:none;stroke:#183231;stroke-width:.65}.thin,.extension{stroke:#183231;stroke-width:.35;fill:none}.extension{stroke-width:.2}.dimension{stroke:#183231;stroke-width:.3}.view-title{font-size:4px;font-weight:700;fill:#0d3432}.note{font-size:2.6px;fill:#667c79}.label,.callout,.level,.water-label{font-size:2.8px;fill:#183231}.callout{font-size:2.6px;font-weight:700}.level{font-size:2.7px}.water-label{fill:#167f9b;font-weight:700}.dimension-text,.section-text{font-size:2.7px;fill:#183231}.section-text{font-size:3.4px;font-weight:700;fill:#0c7772}.concrete{fill:#e6edeb;stroke:#183231;stroke-width:.65;fill-rule:evenodd}.hatch{fill:url(#concrete-pattern);stroke:#183231;stroke-width:.55}.masonry{fill:url(#masonry-pattern);stroke:#183231;stroke-width:.55}.water{fill:#d8f1f5;stroke:#2b91aa;stroke-width:.3}.water-line{stroke:#168aa5;stroke-width:.7}.rebar{stroke:#d28a14;stroke-width:.55}.section-line{stroke:#0c7772;stroke-width:.45;stroke-dasharray:5 2}.table-text{font-size:2.55px;fill:#183231}.table-header,.meta-label{font-size:2.25px;font-weight:700;fill:#526966}.brand-text{font-size:5.5px;font-weight:800;fill:#0c7772}.meta-value{font-size:3px;fill:#183231}.meta-strong{font-size:3.2px;font-weight:700;fill:#183231}.warning{font-size:3px;font-weight:700;fill:#9b2923}</style>` +
+    `<style>svg{background:#fff;font-family:Arial,sans-serif}.sheet-border,.title-border,.table-border{fill:none;stroke:#183231;stroke-width:.65}.thin,.extension{stroke:#183231;stroke-width:.35;fill:none}.extension{stroke-width:.2}.dimension{stroke:#183231;stroke-width:.3}.view-title{font-size:4px;font-weight:700;fill:#0d3432}.note{font-size:2.6px;fill:#667c79}.label,.callout,.level,.water-label{font-size:2.8px;fill:#183231}.callout{font-size:2.6px;font-weight:700}.level{font-size:2.7px}.water-label{fill:#167f9b;font-weight:700}.dimension-text,.section-text{font-size:2.7px;fill:#183231}.section-text{font-size:3.4px;font-weight:700;fill:#0c7772}.concrete{fill:#e6edeb;stroke:#183231;stroke-width:.65;fill-rule:evenodd}.hatch{fill:url(#concrete-pattern);stroke:#183231;stroke-width:.55}.masonry{fill:url(#masonry-pattern);stroke:#183231;stroke-width:.55}.channel-fill{fill:#e6c56a;fill-opacity:.55}.block-joint{stroke:#607b78;stroke-width:.25}.water{fill:#d8f1f5;stroke:#2b91aa;stroke-width:.3}.water-line{stroke:#168aa5;stroke-width:.7}.rebar{stroke:#d28a14;stroke-width:.55}.section-line{stroke:#0c7772;stroke-width:.45;stroke-dasharray:5 2}.table-text{font-size:2.55px;fill:#183231}.table-header,.meta-label{font-size:2.25px;font-weight:700;fill:#526966}.brand-text{font-size:5.5px;font-weight:800;fill:#0c7772}.meta-value{font-size:3px;fill:#183231}.meta-strong{font-size:3.2px;font-weight:700;fill:#183231}.warning{font-size:3px;font-weight:700;fill:#9b2923}</style>` +
     `<rect class="sheet-border" x="8" y="8" width="404" height="281"/>` +
     planView(input, result) + sectionView(input, result) + wallElevation(input, result) +
     reinforcementSchedule(result) + titleBlock(project, revision) +

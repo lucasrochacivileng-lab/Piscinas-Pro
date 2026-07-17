@@ -1,7 +1,7 @@
 # Aceite da implementacao da Fase 6
 
 Data: 13/07/2026
-Versao: `0.7.0`
+Versao: `0.8.0`
 
 ## Entregue
 
@@ -14,6 +14,9 @@ Versao: `0.7.0`
 - graute vertical por espacamento, cantos continuos e canaletas na base e no topo;
 - sugestoes de ajuste (reduzir, ampliar, compensar, afinar juntas) para paredes fora do modulo;
 - `modulatePoolPerimeter` retornando paredes, encontros, graute, verificacoes e memoria rastreavel.
+- escolha da familia de blocos integrada ao formulario e salva em cada revisao;
+- painel de modulacao com fiadas, pecas, canaletas, celulas grauteadas e ajustes;
+- elevacao modulada incorporada a prancha SVG e resumo incorporado a memoria HTML.
 
 ## Criterios automatizados
 

@@ -403,9 +403,11 @@ export function modulatePoolPerimeter(
     family
   );
 
-  const wallThicknessModules = input.wallThicknessMm / family.moduleMm;
   const thicknessIsModular =
-    Math.abs(wallThicknessModules - Math.round(wallThicknessModules)) <= MODULE_TOLERANCE;
+    Math.abs(input.wallThicknessMm - family.nominalWidthMm) <= 1;
+  const groutSpacingModules = input.verticalGroutSpacingMm / family.moduleMm;
+  const groutSpacingIsModular =
+    Math.abs(groutSpacingModules - Math.round(groutSpacingModules)) <= MODULE_TOLERANCE;
 
   const junction: JunctionPlan = {
     cornerCount: 4,
@@ -461,10 +463,18 @@ export function modulatePoolPerimeter(
     {
       id: "junction-thickness-modular",
       status: thicknessIsModular ? "PASS" : "REQUIRES_REVIEW",
-      demand: wallThicknessModules,
-      resistance: Math.round(wallThicknessModules),
+      demand: input.wallThicknessMm,
+      resistance: family.nominalWidthMm,
+      unit: "mm",
+      message: "Espessura da parede compativel com a largura nominal da familia de blocos."
+    },
+    {
+      id: "vertical-grout-spacing-modular",
+      status: groutSpacingIsModular ? "PASS" : "REQUIRES_REVIEW",
+      demand: groutSpacingModules,
+      resistance: Math.round(groutSpacingModules),
       unit: "modulos",
-      message: "Espessura de parede compativel com a amarracao modular dos encontros."
+      message: "Espaçamento do graute vertical coincide com a malha de células dos blocos."
     }
   ];
 
@@ -534,40 +544,42 @@ export function modulatePoolPerimeter(
   };
 }
 
-/** Familia academica 39 (bloco 390x190x140, modulo nominal 200 mm). */
+/** Familia academica 39 (bloco 390x190x190, modulo longitudinal 200 mm). */
 export const BLOCK_FAMILY_M20: BlockFamily = Object.freeze({
   id: "academic-block-family-m20",
-  label: "Familia 39 (modulo 200 mm)",
+  label: "Família 39 x 19 x 19 (módulo 200 mm)",
   version: "1.0.0",
   status: "draft",
   moduleMm: 200,
   courseHeightMm: 200,
-  nominalWidthMm: 150,
+  nominalWidthMm: 190,
   jointThicknessMm: 10,
   units: Object.freeze([
     Object.freeze({ id: "m20-full", label: "Bloco inteiro 390", role: "full", nominalLengthMm: 400, isChannel: false }),
     Object.freeze({ id: "m20-half", label: "Meio bloco 190", role: "half", nominalLengthMm: 200, isChannel: false }),
-    Object.freeze({ id: "m20-channel", label: "Canaleta 390", role: "channel", nominalLengthMm: 400, isChannel: true })
+    Object.freeze({ id: "m20-channel", label: "Canaleta 390", role: "channel", nominalLengthMm: 400, isChannel: true }),
+    Object.freeze({ id: "m20-half-channel", label: "Meia canaleta 190", role: "channel", nominalLengthMm: 200, isChannel: true })
   ]) as readonly BlockUnit[],
   references: [
     "Familia modular academica compativel com Silva (2022); dimensoes nominais para modulacao."
   ]
 });
 
-/** Familia academica 29 (bloco 290x190x140, modulo nominal 150 mm). */
+/** Familia academica 29 (bloco 290x190x140, modulo longitudinal 150 mm). */
 export const BLOCK_FAMILY_M15: BlockFamily = Object.freeze({
   id: "academic-block-family-m15",
-  label: "Familia 29 (modulo 150 mm)",
+  label: "Família 29 x 19 x 14 (módulo 150 mm)",
   version: "1.0.0",
   status: "draft",
   moduleMm: 150,
   courseHeightMm: 200,
-  nominalWidthMm: 150,
+  nominalWidthMm: 140,
   jointThicknessMm: 10,
   units: Object.freeze([
     Object.freeze({ id: "m15-full", label: "Bloco inteiro 290", role: "full", nominalLengthMm: 300, isChannel: false }),
     Object.freeze({ id: "m15-half", label: "Meio bloco 140", role: "half", nominalLengthMm: 150, isChannel: false }),
-    Object.freeze({ id: "m15-channel", label: "Canaleta 290", role: "channel", nominalLengthMm: 300, isChannel: true })
+    Object.freeze({ id: "m15-channel", label: "Canaleta 290", role: "channel", nominalLengthMm: 300, isChannel: true }),
+    Object.freeze({ id: "m15-half-channel", label: "Meia canaleta 140", role: "channel", nominalLengthMm: 150, isChannel: true })
   ]) as readonly BlockUnit[],
   references: [
     "Familia modular academica compativel com Silva (2022); dimensoes nominais para modulacao."
