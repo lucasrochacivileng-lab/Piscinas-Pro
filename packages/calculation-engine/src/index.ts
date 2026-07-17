@@ -53,6 +53,11 @@ export type {
   SoilMaterial,
   SptLayerInput
 } from "./geotechnical.js";
+export { runIntegratedDesign } from "./integrated-design.js";
+export type {
+  IntegratedDesignInput,
+  IntegratedDesignResult
+} from "./integrated-design.js";
 export {
   buildPoolGeometryModel,
   groundwaterHeadAboveZoneSlabBottomMm,
