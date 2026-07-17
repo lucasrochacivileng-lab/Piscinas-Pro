@@ -111,7 +111,7 @@ test("modela praia contínua de zero até o fundo sem criar degrau falso", async
   await page.getByRole("spinbutton", { name: /^Profundidade inicial mm$/ }).fill("0");
   await page.getByRole("spinbutton", { name: /^Profundidade final mm$/ }).fill("1400");
   await page.getByRole("spinbutton", { name: /^Profundidade d'água mm$/ }).fill("1400");
-  await expect(page.getByDisplayValue(/28\.00%/)).toBeVisible();
+  await expect(page.getByRole("textbox", { name: /^Inclinação \/ comprimento real$/ })).toHaveValue(/28\.00%/);
 
   await page.getByRole("button", { name: "Calcular e salvar revisão" }).click();
   const results = page.locator(".results-panel");
