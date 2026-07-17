@@ -1,4 +1,4 @@
-import { runIntegratedDesign, type IntegratedDesignInput, type IntegratedDesignResult } from "@poolstruct/calculation-engine";
+import { runIntegratedDesign, type IntegratedDesignInput } from "@poolstruct/calculation-engine";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./auth/auth-context";
 import { AuthScreen } from "./components/AuthScreen";
@@ -9,6 +9,11 @@ import { MasonryPanel } from "./components/MasonryPanel";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ResultDashboard } from "./components/ResultDashboard";
 import { RevisionHistory } from "./components/RevisionHistory";
+import {
+  isIntegratedDesignResult,
+  normalizeIntegratedDesignInput,
+  type StoredDesignResult
+} from "./lib/compatibility";
 import { DEFAULT_DESIGN_INPUT } from "./lib/defaults";
 import { DRAWING_SHEET } from "./lib/drawing";
 import type { NewProject, ProjectRecord, RevisionRecord } from "./lib/models";
@@ -28,7 +33,7 @@ export function App() {
   const [revisions, setRevisions] = useState<RevisionRecord[]>([]);
   const [activeRevision, setActiveRevision] = useState<RevisionRecord | null>(null);
   const [editorInput, setEditorInput] = useState<IntegratedDesignInput>(DEFAULT_DESIGN_INPUT);
-  const [result, setResult] = useState<IntegratedDesignResult | null>(null);
+  const [result, setResult] = useState<StoredDesignResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ErrorNotice | null>(null);
 
@@ -61,7 +66,7 @@ export function App() {
       setRevisions(records);
       const latest = records[0];
       setActiveRevision(latest ?? null);
-      setEditorInput(latest?.input ?? DEFAULT_DESIGN_INPUT);
+      setEditorInput(normalizeIntegratedDesignInput(latest?.input ?? DEFAULT_DESIGN_INPUT));
       setResult(latest?.result ?? null);
     } catch (reason) {
       await handleFailure("repository_error", "revision_list_failed", reason, "Falha ao carregar revisões.");
@@ -100,10 +105,11 @@ export function App() {
     setBusy(true);
     setError(null);
     try {
-      const calculation = runIntegratedDesign(input);
-      const revision = await repository.saveRevision(activeProject.id, input, calculation);
+      const normalizedInput = normalizeIntegratedDesignInput(input);
+      const calculation = runIntegratedDesign(normalizedInput);
+      const revision = await repository.saveRevision(activeProject.id, normalizedInput, calculation);
       setActiveProject((current) => current ? { ...current, status: "calculated", updatedAt: revision.createdAt } : current);
-      setEditorInput(input);
+      setEditorInput(normalizedInput);
       setResult(calculation);
       setActiveRevision(revision);
       setRevisions((current) => [revision, ...current]);
@@ -117,7 +123,7 @@ export function App() {
 
   function openRevision(revision: RevisionRecord) {
     setActiveRevision(revision);
-    setEditorInput(revision.input);
+    setEditorInput(normalizeIntegratedDesignInput(revision.input));
     setResult(revision.result);
   }
 
@@ -125,6 +131,9 @@ export function App() {
   if (!user) return <AuthScreen />;
 
   const statusClass = result?.overallStatus === "PASS" ? "sb-pass" : result?.overallStatus === "FAIL" ? "sb-fail" : "sb-review";
+  const engineLabel = result
+    ? isIntegratedDesignResult(result) ? result.integrationVersion : result.engineVersion
+    : null;
 
   return <div className="app-shell">
     <header className="topbar">
@@ -148,7 +157,8 @@ export function App() {
           <section className="project-header"><div><h1>{activeProject.name}</h1><p>{activeProject.location || "Local não informado"}</p></div><span className="project-state">{activeProject.status === "calculated" ? "Calculado" : "Rascunho"}</span></section>
           {activeRevision && <DrawingPanel project={activeProject} revision={activeRevision} />}
           {result && <ResultDashboard result={result} />}
-          {result && <GeotechnicalPanel result={result} />}
+          {result && isIntegratedDesignResult(result) && <GeotechnicalPanel result={result} />}
+          {result && !isIntegratedDesignResult(result) && <section className="results-panel"><div className="warning-box"><strong>Revisão histórica</strong><p>Esta revisão foi calculada antes da integração geotécnica e normativa. Os dados antigos foram preservados; o editor recebeu valores padrão apenas para uma nova revisão.</p></div></section>}
           {result?.masonry && <MasonryPanel masonry={result.masonry} />}
         </>}
       </main>
@@ -160,7 +170,7 @@ export function App() {
       <span>{activeRevision ? `R${activeRevision.revisionNumber}` : "R—"}</span>
       <span>{activeRevision ? `SHA ${activeRevision.inputHash.slice(0, 12)}` : "SHA —"}</span>
       {result && <span className={statusClass}>{result.overallStatus}</span>}
-      {result && <span>motor {result.integrationVersion}</span>}
+      {engineLabel && <span>motor {engineLabel}</span>}
       <span className="grow"></span>
       <span>{DRAWING_SHEET.format} · {DRAWING_SHEET.designation}</span>
       <span>mm · kN · MPa</span>
