@@ -1,4 +1,5 @@
 import type { IntegratedDesignInput, IntegratedDesignResult } from "@poolstruct/calculation-engine";
+import type { StoredDesignResult } from "./compatibility";
 
 export interface AuthUser {
   readonly id: string;
@@ -20,7 +21,7 @@ export interface RevisionRecord {
   readonly projectId: string;
   readonly revisionNumber: number;
   readonly input: IntegratedDesignInput;
-  readonly result: IntegratedDesignResult;
+  readonly result: StoredDesignResult;
   readonly inputHash: string;
   readonly createdAt: string;
 }
