@@ -21,6 +21,7 @@ export interface BarLayout {
 
 export interface StructuralDesignProfile {
   readonly id: string;
+  readonly label: string;
   readonly version: string;
   readonly status: "draft" | "reviewed";
   readonly sourceKind: "academic" | "normative";
@@ -41,6 +42,11 @@ export interface StructuralDesignProfile {
   readonly masonryShearMaximumMPa: number;
   readonly maximumMainSlabSpacingMm: number;
   readonly maximumMainSlabSpacingThicknessFactor: number;
+  readonly minimumGlobalUpliftSafetyFactor: number;
+  readonly minimumMortarStrengthMPa: number;
+  readonly minimumGroutStrengthMPa: number;
+  readonly minimumPrismToBlockEfficiency: number;
+  readonly maximumPrismToBlockEfficiency: number;
   readonly masonryServiceabilityBoundary: readonly (readonly [number, number])[];
   readonly references: readonly string[];
 }
@@ -107,12 +113,17 @@ export function validateStructuralProfile(profile: StructuralDesignProfile): str
     "masonryShearRhoFactorMPa",
     "masonryShearMaximumMPa",
     "maximumMainSlabSpacingMm",
-    "maximumMainSlabSpacingThicknessFactor"
+    "maximumMainSlabSpacingThicknessFactor",
+    "minimumGlobalUpliftSafetyFactor",
+    "minimumMortarStrengthMPa",
+    "minimumGroutStrengthMPa",
+    "minimumPrismToBlockEfficiency",
+    "maximumPrismToBlockEfficiency"
   ];
   const errors: string[] = [];
 
-  if (profile.id.trim() === "" || profile.version.trim() === "") {
-    errors.push("O perfil estrutural deve ter id e versao.");
+  if (profile.id.trim() === "" || profile.label.trim() === "" || profile.version.trim() === "") {
+    errors.push("O perfil estrutural deve ter id, nome e versao.");
   }
   for (const field of positiveFields) {
     const value = profile[field];
@@ -122,6 +133,15 @@ export function validateStructuralProfile(profile: StructuralDesignProfile): str
   }
   if (profile.minimumWallSteelRatio >= 1) {
     errors.push("minimumWallSteelRatio deve ser informado como fracao menor que 1.");
+  }
+  if (profile.minimumPrismToBlockEfficiency >= profile.maximumPrismToBlockEfficiency) {
+    errors.push("A faixa de eficiencia prisma/bloco deve ser crescente.");
+  }
+  if (profile.maximumPrismToBlockEfficiency > 1.5) {
+    errors.push("maximumPrismToBlockEfficiency excede o limite operacional de 1,5.");
+  }
+  if (profile.minimumGlobalUpliftSafetyFactor < 1) {
+    errors.push("minimumGlobalUpliftSafetyFactor deve ser igual ou superior a 1.");
   }
   if (profile.masonryServiceabilityBoundary.length < 2) {
     errors.push("masonryServiceabilityBoundary deve conter ao menos dois pontos.");
