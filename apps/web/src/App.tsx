@@ -24,13 +24,16 @@ interface ErrorNotice {
   readonly correlationId: string;
 }
 
+const DEFAULT_PROFILE_ID = "brazil-2026-preliminary";
+const DEFAULT_GEOTECHNICAL = DEFAULT_DESIGN_INPUT.geotechnical!;
+
 const normalizeLegacyInput = (input: IntegratedDesignInput): IntegratedDesignInput => ({
   ...DEFAULT_DESIGN_INPUT,
   ...input,
   geometry: { ...DEFAULT_DESIGN_INPUT.geometry, ...input.geometry },
   masonry: { ...DEFAULT_DESIGN_INPUT.masonry!, ...(input.masonry ?? {}) },
-  geotechnical: input.geotechnical ?? DEFAULT_DESIGN_INPUT.geotechnical,
-  normativeProfileId: input.normativeProfileId ?? DEFAULT_DESIGN_INPUT.normativeProfileId
+  geotechnical: input.geotechnical ?? DEFAULT_GEOTECHNICAL,
+  normativeProfileId: input.normativeProfileId ?? DEFAULT_PROFILE_ID
 });
 
 export function App() {
