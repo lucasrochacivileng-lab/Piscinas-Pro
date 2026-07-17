@@ -1,11 +1,23 @@
-export type PoolDepthZoneKind = "SHALLOW" | "INTERMEDIATE" | "MAIN";
+export type PoolDepthZoneKind = "BEACH" | "SHALLOW" | "INTERMEDIATE" | "MAIN";
+export type PoolFloorProfile = "HORIZONTAL" | "SLOPED";
 
 export interface PoolDepthZoneInput {
   readonly id: string;
   readonly label: string;
   readonly kind: PoolDepthZoneKind;
+  /** Comprimento horizontal em planta. */
   readonly lengthMm: number;
+  /**
+   * Profundidade máxima do trecho, preservada para compatibilidade com revisões anteriores.
+   * Em trecho inclinado, deve coincidir com max(startWaterDepthMm, endWaterDepthMm).
+   */
   readonly waterDepthMm: number;
+  /** Perfil do piso. Ausente equivale a HORIZONTAL. */
+  readonly floorProfile?: PoolFloorProfile;
+  /** Profundidade vertical no início do trecho. Ausente equivale a waterDepthMm. */
+  readonly startWaterDepthMm?: number;
+  /** Profundidade vertical no fim do trecho. Ausente equivale a waterDepthMm. */
+  readonly endWaterDepthMm?: number;
 }
 
 export interface PoolGeometryInput {
@@ -43,10 +55,22 @@ export interface HydrostaticZoneResult {
   readonly id: string;
   readonly label: string;
   readonly kind: PoolDepthZoneKind;
+  readonly floorProfile: PoolFloorProfile;
+  /** Comprimento horizontal em planta. */
   readonly lengthMm: number;
+  /** Profundidade máxima legada do trecho. */
   readonly waterDepthMm: number;
+  readonly startWaterDepthMm: number;
+  readonly endWaterDepthMm: number;
+  readonly averageWaterDepthMm: number;
+  readonly floorLengthMm: number;
+  readonly slopePercent: number;
   readonly volumeM3: number;
+  /** Pressão máxima no piso do trecho, preservada no campo legado. */
   readonly floorPressureKPa: number;
+  readonly startFloorPressureKPa: number;
+  readonly endFloorPressureKPa: number;
+  readonly averageFloorPressureKPa: number;
 }
 
 export interface HydrostaticResult {
