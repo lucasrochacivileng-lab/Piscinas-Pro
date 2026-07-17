@@ -26,28 +26,8 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run release:validate
-      - name: Unit tests
-        shell: bash
-        run: |
-          set -o pipefail
-          npm test 2>&1 | tee unit-test-output.log
-      - uses: actions/upload-artifact@v5
-        if: ${{ !cancelled() }}
-        with:
-          name: unit-test-output
-          path: unit-test-output.log
-          retention-days: 2
-      - name: TypeScript check
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run check 2>&1 | tee typecheck-output.log
-      - uses: actions/upload-artifact@v5
-        if: ${{ !cancelled() }}
-        with:
-          name: typecheck-output
-          path: typecheck-output.log
-          retention-days: 2
+      - run: npm test
+      - run: npm run check
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
