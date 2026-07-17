@@ -13,7 +13,10 @@ export const DEFAULT_DESIGN_INPUT: IntegratedDesignInput = {
       label: "Fundo principal",
       kind: "MAIN",
       lengthMm: 8000,
-      waterDepthMm: 1400
+      waterDepthMm: 1400,
+      floorProfile: "HORIZONTAL",
+      startWaterDepthMm: 1400,
+      endWaterDepthMm: 1400
     }]
   },
   saturatedSoilUnitWeightKNM3: 20,
