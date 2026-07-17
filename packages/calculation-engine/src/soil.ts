@@ -143,7 +143,7 @@ export function legacyGeotechnicalInput(
       topDepthMm: 0,
       bottomDepthMm: Math.max(5_000, baseDepthMm + 1_000),
       nspt: 10,
-      saturatedUnitWeightKNM3,
+      saturatedUnitWeightKNM3: saturatedSoilUnitWeightKNM3,
       frictionAngleDegrees: soilFrictionAngleDegrees
     }],
     groundwaterDepthBelowGradeMm: Math.max(0, baseDepthMm - groundwaterHeadAboveSlabBottomMm),
