@@ -1,4 +1,9 @@
-import { runPhase1Design, SILVA_2022_PHASE1_PROFILE, type Phase1DesignInput, type Phase1DesignResult } from "@poolstruct/calculation-engine";
+import {
+  findStructuralDesignProfile,
+  runIntegratedDesign,
+  type IntegratedDesignInput,
+  type IntegratedDesignResult
+} from "@poolstruct/calculation-engine";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./auth/auth-context";
 import { AuthScreen } from "./components/AuthScreen";
@@ -19,6 +24,15 @@ interface ErrorNotice {
   readonly correlationId: string;
 }
 
+const normalizeLegacyInput = (input: IntegratedDesignInput): IntegratedDesignInput => ({
+  ...DEFAULT_DESIGN_INPUT,
+  ...input,
+  geometry: { ...DEFAULT_DESIGN_INPUT.geometry, ...input.geometry },
+  masonry: { ...DEFAULT_DESIGN_INPUT.masonry!, ...(input.masonry ?? {}) },
+  geotechnical: input.geotechnical ?? DEFAULT_DESIGN_INPUT.geotechnical,
+  normativeProfileId: input.normativeProfileId ?? DEFAULT_DESIGN_INPUT.normativeProfileId
+});
+
 export function App() {
   const { user, loading, localMode, signOut } = useAuth();
   const repository = useMemo(() => user ? createProjectRepository(user.id) : null, [user]);
@@ -26,8 +40,8 @@ export function App() {
   const [activeProject, setActiveProject] = useState<ProjectRecord | null>(null);
   const [revisions, setRevisions] = useState<RevisionRecord[]>([]);
   const [activeRevision, setActiveRevision] = useState<RevisionRecord | null>(null);
-  const [editorInput, setEditorInput] = useState<Phase1DesignInput>(DEFAULT_DESIGN_INPUT);
-  const [result, setResult] = useState<Phase1DesignResult | null>(null);
+  const [editorInput, setEditorInput] = useState<IntegratedDesignInput>(DEFAULT_DESIGN_INPUT);
+  const [result, setResult] = useState<IntegratedDesignResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ErrorNotice | null>(null);
 
@@ -63,7 +77,7 @@ export function App() {
       setRevisions(records);
       const latest = records[0];
       setActiveRevision(latest ?? null);
-      setEditorInput(latest?.input ?? DEFAULT_DESIGN_INPUT);
+      setEditorInput(latest ? normalizeLegacyInput(latest.input) : DEFAULT_DESIGN_INPUT);
       setResult(latest?.result ?? null);
     } catch (reason) {
       await handleFailure("repository_error", "revision_list_failed", reason, "Falha ao carregar revisões.");
@@ -97,15 +111,17 @@ export function App() {
     }
   }
 
-  async function calculate(input: Phase1DesignInput) {
+  async function calculate(input: IntegratedDesignInput) {
     if (!repository || !activeProject) return;
     setBusy(true);
     setError(null);
     try {
-      const calculation = runPhase1Design(input, SILVA_2022_PHASE1_PROFILE);
-      const revision = await repository.saveRevision(activeProject.id, input, calculation);
+      const normalized = normalizeLegacyInput(input);
+      const profile = findStructuralDesignProfile(normalized.normativeProfileId);
+      const calculation = runIntegratedDesign(normalized, profile);
+      const revision = await repository.saveRevision(activeProject.id, normalized, calculation);
       setActiveProject((current) => current ? { ...current, status: "calculated", updatedAt: revision.createdAt } : current);
-      setEditorInput(input);
+      setEditorInput(normalized);
       setResult(calculation);
       setActiveRevision(revision);
       setRevisions((current) => [revision, ...current]);
@@ -119,7 +135,7 @@ export function App() {
 
   function openRevision(revision: RevisionRecord) {
     setActiveRevision(revision);
-    setEditorInput(revision.input);
+    setEditorInput(normalizeLegacyInput(revision.input));
     setResult(revision.result);
   }
 
@@ -144,8 +160,8 @@ export function App() {
         {!activeProject ? <section className="welcome-card"><div>
           <p className="eyebrow">Ambiente de dimensionamento</p>
           <h1>Nenhum projeto aberto</h1>
-          <p>Crie ou selecione um projeto no navegador à esquerda para carregar o modelo estrutural, as revisões imutáveis e a prancha PS-01.</p>
-          <div className="welcome-features"><span>Motor determinístico</span><span>Prancha A3 vetorial</span><span>Histórico SHA-256</span></div>
+          <p>Crie ou selecione um projeto no navegador à esquerda para carregar o modelo estrutural, o perfil SPT, as revisões imutáveis e a prancha PS-01.</p>
+          <div className="welcome-features"><span>SPT por camada</span><span>Flutuação global</span><span>Perfil normativo versionado</span></div>
         </div></section> : <>
           <section className="project-header"><div><h1>{activeProject.name}</h1><p>{activeProject.location || "Local não informado"}</p></div><span className="project-state">{activeProject.status === "calculated" ? "Calculado" : "Rascunho"}</span></section>
           {activeRevision && <DrawingPanel project={activeProject} revision={activeRevision} />}
@@ -161,11 +177,11 @@ export function App() {
       <span>{activeRevision ? `R${activeRevision.revisionNumber}` : "R—"}</span>
       <span>{activeRevision ? `SHA ${activeRevision.inputHash.slice(0, 12)}` : "SHA —"}</span>
       {result && <span className={statusClass}>{result.overallStatus}</span>}
-      {result && <span>motor {result.engineVersion}</span>}
+      {result && <span>motor {result.integrationVersion ?? result.engineVersion}</span>}
       <span className="grow"></span>
       <span>{DRAWING_SHEET.format} · {DRAWING_SHEET.designation}</span>
       <span>mm · kN · MPa</span>
-      <span className="sb-warn">PRÉ-DIMENSIONAMENTO ACADÊMICO</span>
+      <span className="sb-warn">PRÉ-DIMENSIONAMENTO · REVISÃO TÉCNICA OBRIGATÓRIA</span>
     </footer>
   </div>;
 }
