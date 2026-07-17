@@ -22,7 +22,7 @@ export function ProjectSidebar({ projects, activeProjectId, onSelect, onCreate, 
     setCreating(false);
   }
 
-  return <aside className="sidebar">
+  return <section className="sidebar">
     <div className="sidebar-heading"><span>Projetos</span><button className="icon-button" onClick={() => setCreating((value) => !value)} aria-label="Novo projeto">+</button></div>
     {creating && <form className="project-form" onSubmit={(event) => void submit(event)}>
       <label>Nome<input value={name} maxLength={120} onChange={(event) => setName(event.target.value)} required autoFocus /></label>
@@ -38,5 +38,5 @@ export function ProjectSidebar({ projects, activeProjectId, onSelect, onCreate, 
         <button className="archive-button" onClick={() => void onArchive(project.id)} aria-label={`Arquivar ${project.name}`}>×</button>
       </div>)}
     </nav>
-  </aside>;
+  </section>;
 }

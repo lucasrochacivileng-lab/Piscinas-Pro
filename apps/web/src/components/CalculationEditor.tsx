@@ -33,7 +33,7 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
   }
 
   return <form className="editor" onSubmit={submit}>
-    <div className="section-title"><div><p className="eyebrow">Dados de entrada</p><h2>Modelo estrutural</h2></div><button className="primary calculate-button" disabled={busy}>{busy ? "Calculando…" : "Calcular e salvar revisão"}</button></div>
+    <div className="section-title"><div><p className="eyebrow">Propriedades</p><h2>Modelo estrutural</h2></div><button className="primary calculate-button" disabled={busy}>{busy ? "Calculando…" : "Calcular e salvar revisão"}</button></div>
     <fieldset><legend>Geometria da piscina</legend><div className="form-grid">
       <NumberField label="Comprimento interno" value={geometry.internalLengthMm} unit="mm" onChange={(value) => setGeometry("internalLengthMm", value)} />
       <NumberField label="Largura interna" value={geometry.internalWidthMm} unit="mm" onChange={(value) => setGeometry("internalWidthMm", value)} />

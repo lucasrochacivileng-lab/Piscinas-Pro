@@ -1,3 +1,7 @@
+import type { BlockFamily } from "./modulation.js";
+import type { Phase1DesignResult } from "./phase1.js";
+import type { PoolGeometryInput } from "./types.js";
+
 export interface SteelBarScheduleItem {
   readonly diameterMm: number;
   readonly count: number;
@@ -144,4 +148,111 @@ export function calculateMaterialQuantities(
     totalConcreteM3: slabResults.reduce((total, item) => total + item.groutOrConcreteM3, 0),
     wasteFactor
   };
+}
+
+export interface PoolTakeoffOptions {
+  readonly verticalGroutSpacingMm: number;
+  readonly verticalHoleAreaMm2: number;
+  readonly horizontalChannelAreaMm2: number;
+  readonly bondBeamCoursesPerWall: number;
+  readonly anchorageMm: number;
+  readonly wasteFactor: number;
+}
+
+export const DEFAULT_POOL_TAKEOFF_OPTIONS: PoolTakeoffOptions = Object.freeze({
+  verticalGroutSpacingMm: 800,
+  verticalHoleAreaMm2: 8_000,
+  horizontalChannelAreaMm2: 7_000,
+  bondBeamCoursesPerWall: 2,
+  anchorageMm: 500,
+  wasteFactor: 1.1
+});
+
+/**
+ * Levantamento academico de quantitativos de uma piscina retangular a partir do
+ * resultado da Fase 1 e da familia de blocos. Converte geometria e armaduras
+ * calculadas em entradas de material e retorna o consolidado com perdas.
+ */
+export function takeoffPoolQuantities(
+  geometry: PoolGeometryInput,
+  result: Phase1DesignResult,
+  family: BlockFamily,
+  options: PoolTakeoffOptions = DEFAULT_POOL_TAKEOFF_OPTIONS
+): MaterialQuantitiesResult {
+  const { internalLengthMm, internalWidthMm, waterDepthMm, wallThicknessMm, slabThicknessMm } = geometry;
+  for (const [label, value] of Object.entries({ ...geometry, ...options })) {
+    if (typeof value === "number" && (!Number.isFinite(value) || value <= 0)) {
+      throw new RangeError(`${label} deve ser positivo e finito para o levantamento.`);
+    }
+  }
+  const fullUnit = family.units.find((unit) => unit.role === "full");
+  if (!fullUnit) throw new RangeError("A familia de blocos precisa de bloco inteiro.");
+  const blockLengthMm = fullUnit.nominalLengthMm;
+  const blockHeightMm = family.courseHeightMm;
+
+  const wallHeightMm = waterDepthMm;
+  const longWallLengthMm = internalLengthMm + 2 * wallThicknessMm;
+  const shortWallLengthMm = internalWidthMm;
+
+  const wallSteel = (
+    lengthMm: number,
+    horizontal: { diameterMm: number; spacingMm: number },
+    vertical: { diameterMm: number; spacingMm: number }
+  ): SteelBarScheduleItem[] => [
+    {
+      diameterMm: horizontal.diameterMm,
+      count: Math.ceil(wallHeightMm / horizontal.spacingMm) + 1,
+      lengthMm: lengthMm + 2 * options.anchorageMm
+    },
+    {
+      diameterMm: vertical.diameterMm,
+      count: Math.ceil(lengthMm / vertical.spacingMm) + 1,
+      lengthMm: wallHeightMm + 2 * options.anchorageMm
+    }
+  ];
+
+  const wallInput = (
+    id: string,
+    lengthMm: number,
+    wall: Phase1DesignResult["longWall"]
+  ): WallQuantityInput => ({
+    id,
+    occurrences: 2,
+    lengthMm,
+    heightMm: wallHeightMm,
+    blockLengthMm,
+    blockHeightMm,
+    verticalGroutedCells: Math.ceil(lengthMm / options.verticalGroutSpacingMm) + 1,
+    horizontalGroutedCourses: options.bondBeamCoursesPerWall,
+    verticalHoleAreaMm2: options.verticalHoleAreaMm2,
+    horizontalChannelAreaMm2: options.horizontalChannelAreaMm2,
+    steel: wallSteel(lengthMm, wall.design.parallel.layout, wall.design.perpendicular.layout)
+  });
+
+  const slabLengthMm = internalLengthMm + 2 * wallThicknessMm;
+  const slabWidthMm = internalWidthMm + 2 * wallThicknessMm;
+  const slabSteel: SteelBarScheduleItem[] = [
+    { diameterMm: result.slab.bottomX.layout.diameterMm, count: Math.ceil(slabWidthMm / result.slab.bottomX.layout.spacingMm) + 1, lengthMm: slabLengthMm },
+    { diameterMm: result.slab.bottomY.layout.diameterMm, count: Math.ceil(slabLengthMm / result.slab.bottomY.layout.spacingMm) + 1, lengthMm: slabWidthMm },
+    { diameterMm: result.slab.topX.layout.diameterMm, count: Math.ceil(slabWidthMm / result.slab.topX.layout.spacingMm) + 1, lengthMm: slabLengthMm },
+    { diameterMm: result.slab.topY.layout.diameterMm, count: Math.ceil(slabLengthMm / result.slab.topY.layout.spacingMm) + 1, lengthMm: slabWidthMm }
+  ];
+
+  return calculateMaterialQuantities(
+    [
+      wallInput("parede-longa", longWallLengthMm, result.longWall),
+      wallInput("parede-curta", shortWallLengthMm, result.shortWall)
+    ],
+    [
+      {
+        id: "laje-fundo",
+        occurrences: 1,
+        lengthMm: slabLengthMm,
+        widthMm: slabWidthMm,
+        thicknessMm: slabThicknessMm,
+        steel: slabSteel
+      }
+    ],
+    options.wasteFactor
+  );
 }

@@ -61,6 +61,30 @@ O dimensionamento usa secao retangular de largura unitaria. A relacao `KZ = 1 - 
 
 `calculateMaterialQuantities` calcula blocos, massa de aco, graute e concreto com fator de perdas. `runPhase1Design` integra hidrostatica, casos de carga, paredes longa/curta e laje, retornando todas as verificacoes e o estado global.
 
+## Modulacao (Fase 6)
+
+O modulo `modulation.ts` distribui a alvenaria em blocos e serve para pre-dimensionamento academico. As entradas sao nominais em milimetros (bloco real + junta).
+
+### Familias de blocos
+
+Uma `BlockFamily` define o modulo de coordenacao (meio bloco nominal), a altura da fiada, a largura nominal, a junta e as pecas. Exige um bloco inteiro (`full`, dois modulos), um meio bloco (`half`, um modulo) e admite canaleta (`channel`) para cinta e verga. `validateBlockFamily` rejeita pecas que nao sejam multiplos inteiros do modulo. Sao fornecidas as familias academicas `BLOCK_FAMILY_M20` (modulo 200 mm) e `BLOCK_FAMILY_M15` (modulo 150 mm).
+
+### Fiadas e amarracao
+
+`layoutCourse` preenche uma fiada por amarracao em contra-fiada: a fiada base comeca com bloco inteiro e a contra-fiada comeca com meio bloco, deslocando as juntas verticais em um modulo. Comprimentos impares fecham com meio bloco. `modulateWall` monta a parede por numero de fiadas, contabiliza inteiros, meios e canaletas e conta as cores de graute vertical pelo espacamento informado.
+
+### Encontros
+
+`modulatePoolPerimeter` resolve os quatro cantos de uma piscina retangular como encontros em L, alternando qual parede passa pelo canto entre a fiada e a contra-fiada. Os comprimentos de assentamento sao tomados pelo eixo das paredes (`L_interno + t`), de modo que os cantos sejam contados uma unica vez. A verificacao `junction-thickness-modular` sinaliza quando a espessura de parede nao coincide com o modulo.
+
+### Graute
+
+O graute vertical e posicionado pelo espacamento das armaduras, com cantos sempre grauteados de forma continua. As fiadas de canaleta ficam na base e no topo e, opcionalmente, a cada `bondBeamCourseSpacing` fiadas, recebendo o graute horizontal da cinta.
+
+### Sugestoes de ajuste
+
+Quando a parede nao fecha no modulo, `suggestModularAdjustments` propoe reduzir para o modulo inferior, ampliar para o superior, absorver o residuo com peca de compensacao existente na familia ou distribuir o residuo nas juntas quando ficar dentro de 3 mm por junta. Paredes fora do modulo aparecem como `REQUIRES_REVIEW`, nunca como aprovacao silenciosa.
+
 ## Gate profissional
 
-O motor esta completo para o escopo academico da Fase 1. Fissuracao/flechas da laje, estabilidade global a flutuacao e validacao normativa permanecem como `REQUIRES_REVIEW`; nunca sao convertidas silenciosamente em aprovacao.
+O motor esta completo para o escopo academico das Fases 1 e 6. Fissuracao/flechas da laje, estabilidade global a flutuacao, amarracao detalhada e validacao normativa permanecem como `REQUIRES_REVIEW`; nunca sao convertidas silenciosamente em aprovacao.

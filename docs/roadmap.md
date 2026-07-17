@@ -85,3 +85,16 @@ Status: concluida em 13/07/2026 na versao `0.6.0`.
 - [x] testes unitarios, seguranca de metadados e cobertura E2E da exportacao.
 
 Os desenhos sao documentos de pre-dimensionamento academico. Detalhes de ancoragem, emendas, aberturas, juntas, impermeabilizacao e compatibilizacao executiva permanecem sob responsabilidade de engenheiro habilitado.
+
+## Fase 6 - Modulacao
+
+Status: concluida em 13/07/2026 na versao `0.7.0`.
+
+- [x] familias de blocos academicas com coordenacao modular e canaleta;
+- [x] fiadas com amarracao em contra-fiada e deslocamento de um modulo;
+- [x] encontros de canto em L com alternancia de parede passante;
+- [x] graute vertical por espacamento e fiadas de canaleta na base e no topo;
+- [x] sugestoes de ajuste para paredes fora da modulacao;
+- [x] testes do algoritmo cobrindo fiadas, paredes, encontros e determinismo.
+
+A modulacao usa o metodo de eixo e serve para pre-dimensionamento academico. Amarracao detalhada, ancoragem e emenda das armaduras, cantos especiais, juntas e impermeabilizacao permanecem sob responsabilidade de engenheiro habilitado.

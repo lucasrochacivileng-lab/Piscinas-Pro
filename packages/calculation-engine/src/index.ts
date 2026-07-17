@@ -24,14 +24,59 @@ export type {
   MasonryDesignResult,
   MasonryDirectionResult
 } from "./masonry-design.js";
-export { calculateMaterialQuantities, steelBarMassKg } from "./quantities.js";
+export {
+  calculateMaterialQuantities,
+  DEFAULT_POOL_TAKEOFF_OPTIONS,
+  steelBarMassKg,
+  takeoffPoolQuantities
+} from "./quantities.js";
 export type {
   ElementQuantityResult,
   MaterialQuantitiesResult,
+  PoolTakeoffOptions,
   SlabQuantityInput,
   SteelBarScheduleItem,
   WallQuantityInput
 } from "./quantities.js";
+export {
+  compareCostEstimates,
+  DEFAULT_PRICE_TABLE,
+  estimateCosts,
+  validatePriceTable
+} from "./costing.js";
+export type {
+  CostComparisonLine,
+  CostComparisonResult,
+  CostEstimateResult,
+  CostLineItem,
+  CostMaterial,
+  PriceTable
+} from "./costing.js";
+export {
+  BLOCK_FAMILY_M15,
+  BLOCK_FAMILY_M20,
+  DEFAULT_BLOCK_FAMILIES,
+  layoutCourse,
+  modulatePoolPerimeter,
+  modulateWall,
+  suggestModularAdjustments,
+  validateBlockFamily
+} from "./modulation.js";
+export type {
+  BlockFamily,
+  BlockRole,
+  BlockUnit,
+  CourseLayout,
+  CoursePlacement,
+  GroutPlan,
+  JunctionPlan,
+  ModularAdjustment,
+  ModularAdjustmentKind,
+  PoolModulationInput,
+  PoolModulationResult,
+  WallModulationInput,
+  WallModulationResult
+} from "./modulation.js";
 export { runPhase1Design } from "./phase1.js";
 export type {
   Phase1DesignInput,

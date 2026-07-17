@@ -8,6 +8,7 @@ import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ResultDashboard } from "./components/ResultDashboard";
 import { RevisionHistory } from "./components/RevisionHistory";
 import { DEFAULT_DESIGN_INPUT } from "./lib/defaults";
+import { DRAWING_SHEET } from "./lib/drawing";
 import type { NewProject, ProjectRecord, RevisionRecord } from "./lib/models";
 import { reportOperationalError, type OperationalEventType } from "./lib/observability";
 import { createProjectRepository } from "./lib/repository";
@@ -124,21 +125,45 @@ export function App() {
   if (loading) return <div className="loading-screen">Carregando ambiente seguro…</div>;
   if (!user) return <AuthScreen />;
 
+  const statusClass = result?.overallStatus === "PASS" ? "sb-pass" : result?.overallStatus === "FAIL" ? "sb-fail" : "sb-review";
+
   return <div className="app-shell">
     <header className="topbar">
-      <div className="brand"><div className="brand-mark">PS</div><div><strong>POOLSTRUCT</strong><small>Estruturas de piscinas</small></div></div>
+      <div className="brand"><div className="brand-mark">PS</div><div><strong>POOLSTRUCT</strong><small>Pré-dimensionamento estrutural de piscinas</small></div></div>
       <div className="account"><span>{user.email}</span>{!localMode && <button className="text-button" onClick={() => void signOut()}>Sair</button>}</div>
     </header>
-    {localMode && <div className="local-banner"><strong>Modo local ativo.</strong> Configure as variáveis do Supabase para autenticação, RLS e sincronização em nuvem.</div>}
-    <div className="workspace">
-      <ProjectSidebar projects={projects} activeProjectId={activeProject?.id ?? null} onSelect={(project) => void selectProject(project)} onCreate={createProject} onArchive={archiveProject} />
+    {localMode && <div className="local-banner"><strong>MODO LOCAL</strong> — configure as variáveis do Supabase para autenticação, RLS e sincronização em nuvem.</div>}
+    <div className={activeProject ? "workspace with-props" : "workspace"}>
+      <aside className="navigator">
+        <ProjectSidebar projects={projects} activeProjectId={activeProject?.id ?? null} onSelect={(project) => void selectProject(project)} onCreate={createProject} onArchive={archiveProject} />
+        {activeProject && <RevisionHistory project={activeProject} revisions={revisions} onOpen={openRevision} />}
+      </aside>
       <main className="main-content">
         {error && <div className="error-banner" role="alert"><strong>{error.message}</strong><small>Código do incidente: {error.correlationId}</small></div>}
-        {!activeProject ? <section className="welcome-card"><p className="eyebrow">Fase 5 · desenhos automáticos</p><h1>Do modelo estrutural à prancha técnica.</h1><p>Crie um projeto para dimensionar paredes e laje, registrar revisões imutáveis e gerar desenhos vetoriais rastreáveis.</p><div className="welcome-features"><span>Motor determinístico</span><span>Prancha A3 em SVG</span><span>Histórico com SHA-256</span></div></section> : <>
-          <section className="project-header"><div><p className="eyebrow">Projeto ativo</p><h1>{activeProject.name}</h1><p>{activeProject.location || "Local não informado"}</p></div><span className="project-state">{activeProject.status === "calculated" ? "Calculado" : "Rascunho"}</span></section>
-          <div className="content-grid"><div className="primary-column"><CalculationEditor initialInput={editorInput} busy={busy} onCalculate={calculate} />{result && <ResultDashboard result={result} />}{activeRevision && <DrawingPanel project={activeProject} revision={activeRevision} />}</div><RevisionHistory project={activeProject} revisions={revisions} onOpen={openRevision} /></div>
+        {!activeProject ? <section className="welcome-card"><div>
+          <p className="eyebrow">Ambiente de dimensionamento</p>
+          <h1>Nenhum projeto aberto</h1>
+          <p>Crie ou selecione um projeto no navegador à esquerda para carregar o modelo estrutural, as revisões imutáveis e a prancha PS-01.</p>
+          <div className="welcome-features"><span>Motor determinístico</span><span>Prancha A3 vetorial</span><span>Histórico SHA-256</span></div>
+        </div></section> : <>
+          <section className="project-header"><div><h1>{activeProject.name}</h1><p>{activeProject.location || "Local não informado"}</p></div><span className="project-state">{activeProject.status === "calculated" ? "Calculado" : "Rascunho"}</span></section>
+          {activeRevision && <DrawingPanel project={activeProject} revision={activeRevision} />}
+          {result && <ResultDashboard result={result} />}
         </>}
       </main>
+      {activeProject && <aside className="props-panel"><CalculationEditor initialInput={editorInput} busy={busy} onCalculate={calculate} /></aside>}
     </div>
+    <footer className="statusbar">
+      <span className="sb-accent">POOLSTRUCT</span>
+      <span>{activeProject ? activeProject.name : "sem projeto"}</span>
+      <span>{activeRevision ? `R${activeRevision.revisionNumber}` : "R—"}</span>
+      <span>{activeRevision ? `SHA ${activeRevision.inputHash.slice(0, 12)}` : "SHA —"}</span>
+      {result && <span className={statusClass}>{result.overallStatus}</span>}
+      {result && <span>motor {result.engineVersion}</span>}
+      <span className="grow"></span>
+      <span>{DRAWING_SHEET.format} · {DRAWING_SHEET.designation}</span>
+      <span>mm · kN · MPa</span>
+      <span className="sb-warn">PRÉ-DIMENSIONAMENTO ACADÊMICO</span>
+    </footer>
   </div>;
 }

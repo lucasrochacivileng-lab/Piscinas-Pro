@@ -2,7 +2,7 @@
 
 POOLSTRUCT e uma base de software para pre-dimensionamento e verificacao rastreavel de piscinas com paredes em alvenaria estrutural e laje de fundo em concreto armado. O objetivo e transformar entradas geometricas, materiais e perfis tecnicos versionados em memorias de calculo auditaveis.
 
-> Estado: Fase 5 concluida na versao `0.6.0`. O produto gera uma prancha estrutural A3 vetorial e rastreavel para cada revisao, alem de possuir CI reproduzivel, testes E2E desktop/mobile e validacao de release. A liberacao profissional continua bloqueada ate auditoria e assinatura de engenheiro independente.
+> Estado: Fase 6 concluida na versao `0.7.0`. Alem da prancha A3 rastreavel, o motor agora modula a alvenaria em familias de blocos, fiadas, encontros e graute, com sugestoes de ajuste quando o comprimento nao fecha no modulo. A liberacao profissional continua bloqueada ate auditoria e assinatura de engenheiro independente.
 
 ## Requisitos
 
@@ -108,6 +108,18 @@ Em producao, defina apenas `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`
 - visualizacao no produto e download sem dependencia de AutoCAD.
 
 Consulte `docs/drawings.md` para convencoes, rastreabilidade e limites do desenho.
+
+## Modulacao da Fase 6
+
+- familias de blocos academicas com modulo, altura de fiada, largura e canaleta;
+- fiadas com amarracao em contra-fiada e deslocamento de um modulo entre elas;
+- meio bloco para fechar comprimentos impares e canaleta para cinta e verga;
+- encontros de canto em L com alternancia da parede passante por fiada;
+- graute vertical por espacamento, cantos sempre grauteados e fiadas de canaleta na base e no topo;
+- sugestoes de ajuste (reduzir, ampliar, compensar ou afinar juntas) quando a parede nao fecha no modulo;
+- `modulatePoolPerimeter` retorna paredes, encontros, graute, verificacoes e memoria rastreavel.
+
+A modulacao usa o metodo de eixo e permanece um pre-dimensionamento academico. Consulte `docs/calculation-engine.md` para as convencoes e limites.
 
 ## Capacidades da Fase 1
 
