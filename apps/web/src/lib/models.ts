@@ -1,4 +1,4 @@
-import type { Phase1DesignInput, Phase1DesignResult } from "@poolstruct/calculation-engine";
+import type { IntegratedDesignInput, IntegratedDesignResult } from "@poolstruct/calculation-engine";
 
 export interface AuthUser {
   readonly id: string;
@@ -19,8 +19,8 @@ export interface RevisionRecord {
   readonly id: string;
   readonly projectId: string;
   readonly revisionNumber: number;
-  readonly input: Phase1DesignInput;
-  readonly result: Phase1DesignResult;
+  readonly input: IntegratedDesignInput;
+  readonly result: IntegratedDesignResult;
   readonly inputHash: string;
   readonly createdAt: string;
 }
@@ -37,7 +37,7 @@ export interface ProjectRepository {
   listRevisions(projectId: string): Promise<RevisionRecord[]>;
   saveRevision(
     projectId: string,
-    input: Phase1DesignInput,
-    result: Phase1DesignResult
+    input: IntegratedDesignInput,
+    result: IntegratedDesignResult
   ): Promise<RevisionRecord>;
 }
