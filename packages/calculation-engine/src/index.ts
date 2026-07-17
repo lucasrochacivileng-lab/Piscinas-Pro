@@ -1,8 +1,11 @@
 export { calculateHydrostaticAction } from "./hydrostatic.js";
 export {
+  BRAZIL_2026_PRELIMINARY_PROFILE,
   DEMONSTRATION_PROFILE,
+  findStructuralDesignProfile,
   SILVA_2022_ACADEMIC_PROFILE,
-  SILVA_2022_PHASE1_PROFILE
+  SILVA_2022_PHASE1_PROFILE,
+  STRUCTURAL_DESIGN_PROFILES
 } from "./profiles.js";
 export {
   findBlockWebRequirement,
@@ -38,6 +41,8 @@ export type {
   EngineeringCheck,
   StructuralDesignProfile
 } from "./engineering.js";
+export { calculateGlobalFlotation } from "./flotation.js";
+export type { GlobalFlotationInput, GlobalFlotationResult } from "./flotation.js";
 export {
   buildPoolGeometryModel,
   groundwaterHeadAboveZoneSlabBottomMm,
@@ -54,6 +59,13 @@ export type {
   PoolGeometryModel,
   PoolStepTransition
 } from "./geometry.js";
+export { runIntegratedDesign } from "./integrated-design.js";
+export type {
+  IntegratedDesignInput,
+  IntegratedDesignResult,
+  IntegratedMasonryResult,
+  IntegratedMasonrySpecificationInput
+} from "./integrated-design.js";
 export { calculatePoolLoadCases } from "./load-cases.js";
 export type { PoolLoadCasesInput, PoolLoadCasesResult } from "./load-cases.js";
 export { designMasonryPanel } from "./masonry-design.js";
@@ -138,8 +150,20 @@ export type {
   SlabDesignInput,
   SlabDesignResult
 } from "./slab-design.js";
-export { estimateSoilFromSPT } from "./soil.js";
-export type { SoilEstimateFromSPT } from "./soil.js";
+export {
+  analyzeSoilProfile,
+  DEFAULT_GEOTECHNICAL_INPUT,
+  estimateSoilFromSPT,
+  legacyGeotechnicalInput
+} from "./soil.js";
+export type {
+  GeotechnicalInput,
+  ResolvedSoilLayer,
+  SoilEstimateFromSPT,
+  SoilLayerInput,
+  SoilProfileResult,
+  SoilType
+} from "./soil.js";
 export {
   activeEarthPressureCoefficient,
   calculateWallPanelActions,
