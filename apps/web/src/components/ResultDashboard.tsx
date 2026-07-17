@@ -1,20 +1,38 @@
-import type { Phase1DesignResult } from "@poolstruct/calculation-engine";
+import type { IntegratedDesignResult } from "@poolstruct/calculation-engine";
 import { StatusBadge } from "./StatusBadge";
 
 const format = (value: number, digits = 2) => new Intl.NumberFormat("pt-BR", { maximumFractionDigits: digits }).format(value);
 const bar = (diameterMm: number, spacingMm: number) => `Ø ${format(diameterMm, 1)} c/ ${format(spacingMm, 0)} mm`;
 
-export function ResultDashboard({ result }: { result: Phase1DesignResult }) {
+export function ResultDashboard({ result }: { result: IntegratedDesignResult }) {
   const wallPanels = result.wallPanels ?? [];
   const slabZones = result.slabZones ?? [];
+  const geotechnical = result.geotechnical;
+  const flotation = result.flotation;
   return <section className="results-panel">
     <div className="section-title"><div><p className="eyebrow">Último processamento</p><h2>Resultado estrutural</h2></div><StatusBadge status={result.overallStatus} /></div>
     <div className="metrics">
       <article><small>Capacidade</small><strong>{format(result.hydrostatic.approximateCapacityLitres, 0)} L</strong></article>
       <article><small>Pressão máxima</small><strong>{format(result.hydrostatic.maximumWallPressureKPa)} kPa</strong></article>
-      <article><small>Profundidades</small><strong>{result.hydrostatic.zones?.length ?? 1} zona(s)</strong></article>
-      <article><small>Paredes calculadas</small><strong>{wallPanels.length || 4}</strong></article>
+      <article><small>NSPT de apoio</small><strong>{geotechnical ? geotechnical.foundationNspt : "—"}</strong></article>
+      <article><small>FS flutuação</small><strong>{flotation?.safetyFactor === null ? "sem empuxo" : flotation ? format(flotation.safetyFactor, 2) : "—"}</strong></article>
     </div>
+
+    {(result.profileLabel || result.profileId) && <><h3>Perfil de cálculo</h3><div className="reinforcement-grid"><article>
+      <h3>{result.profileLabel ?? result.profileId}</h3><p>Versão {result.profileVersion}</p><p>{result.profileSourceKind === "normative" ? "Base normativa" : "Base acadêmica"} · {result.profileStatus ?? "legado"}</p>
+    </article>{result.masonry && <article><h3>Sistema de alvenaria</h3><p>Bloco: {format(result.masonry.blockStrengthMPa, 1)} MPa</p><p>Argamassa / graute: {format(result.masonry.mortarStrengthMPa, 1)} / {format(result.masonry.groutStrengthMPa, 1)} MPa</p><p>Prisma: {format(result.masonry.prismStrengthMPa, 1)} MPa · eficiência {format(result.masonry.prismToBlockEfficiency, 2)}</p></article>}</div></>}
+
+    {geotechnical && <><h3>Perfil SPT integrado</h3><div className="reinforcement-grid">
+      {geotechnical.layers.map((layer) => <article key={layer.id}><h3>{layer.label}</h3><p>{format(layer.topDepthMm, 0)}–{format(layer.bottomDepthMm, 0)} mm · {layer.soilType}</p><p>NSPT {layer.nspt} · γsat {format(layer.saturatedUnitWeightKNM3, 1)} kN/m³</p><p>φ {format(layer.frictionAngleDegrees, 1)}° · σadm {format(layer.allowableBearingKPa, 0)} kPa</p></article>)}
+      <article><h3>Parâmetros governantes</h3><p>γsat representativo: {format(geotechnical.representativeSaturatedUnitWeightKNM3, 1)} kN/m³</p><p>φ adotado: {format(geotechnical.representativeFrictionAngleDegrees, 1)}°</p><p>N.A.: {format(geotechnical.groundwaterDepthBelowGradeMm, 0)} mm abaixo do topo</p></article>
+    </div></>}
+
+    {flotation && <><h3>Flutuação global — piscina vazia</h3><div className="reinforcement-grid">
+      <article><h3>Subpressão</h3><p>Força ascendente: {format(flotation.grossUpliftKN, 1)} kN</p><p>Área externa: {format(flotation.externalPlanAreaM2, 2)} m²</p></article>
+      <article><h3>Resistência permanente</h3><p>Laje: {format(flotation.slabWeightKN, 1)} kN</p><p>Paredes: {format(flotation.wallWeightKN, 1)} kN</p><p>Adicional: {format(flotation.additionalPermanentResistanceKN, 1)} kN</p></article>
+      <article><h3>Equilíbrio</h3><p>FS calculado: {flotation.safetyFactor === null ? "não aplicável" : format(flotation.safetyFactor, 2)}</p><p>FS mínimo: {format(flotation.requiredSafetyFactor, 2)}</p><p>Empuxo líquido: {format(flotation.netUpliftKN, 1)} kN</p></article>
+    </div></>}
+
     {result.hydrostatic.zones && result.hydrostatic.zones.length > 1 && <><h3>Zonas de profundidade</h3><div className="reinforcement-grid">
       {result.hydrostatic.zones.map((zone) => <article key={zone.id}><h3>{zone.label}</h3><p>{format(zone.lengthMm, 0)} mm de comprimento</p><p>{format(zone.waterDepthMm, 0)} mm de profundidade</p><p>{format(zone.volumeM3, 2)} m³ de água</p></article>)}
     </div></>}
@@ -23,6 +41,7 @@ export function ResultDashboard({ result }: { result: Phase1DesignResult }) {
         <h3>{wall.label}</h3><p>{format(wall.lengthMm, 0)} × {format(wall.heightMm, 0)} mm · {wall.kind === "STEP" ? "degrau" : "perímetro"}</p>
         <p>Horizontal: {bar(wall.design.parallel.layout.diameterMm, wall.design.parallel.layout.spacingMm)}</p>
         <p>Vertical: {bar(wall.design.perpendicular.layout.diameterMm, wall.design.perpendicular.layout.spacingMm)}</p>
+        {wall.design.prismStrengthMPa !== undefined && <p>fpk: {format(wall.design.prismStrengthMPa, 1)} MPa</p>}
       </article>) : <>
         <article><h3>Parede longa governante</h3><p>Horizontal: {bar(result.longWall.design.parallel.layout.diameterMm, result.longWall.design.parallel.layout.spacingMm)}</p><p>Vertical: {bar(result.longWall.design.perpendicular.layout.diameterMm, result.longWall.design.perpendicular.layout.spacingMm)}</p></article>
         <article><h3>Parede curta governante</h3><p>Horizontal: {bar(result.shortWall.design.parallel.layout.diameterMm, result.shortWall.design.parallel.layout.spacingMm)}</p><p>Vertical: {bar(result.shortWall.design.perpendicular.layout.diameterMm, result.shortWall.design.perpendicular.layout.spacingMm)}</p></article>
