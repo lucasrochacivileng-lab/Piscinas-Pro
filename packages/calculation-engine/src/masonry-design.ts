@@ -19,6 +19,8 @@ export interface MasonryDesignInput {
   readonly flexuralTensileStrengthPerpendicularMPa: number;
   readonly forceReinforcedDesign: boolean;
   readonly panelActions: WallPanelResult;
+  readonly prismStrengthMPa?: number;
+  readonly axialStressKPa?: number;
 }
 
 export interface MasonryDirectionResult {
@@ -34,6 +36,9 @@ export interface MasonryDirectionResult {
 export interface MasonryDesignResult {
   readonly effectiveDepthMm: number;
   readonly designSteelStrengthMPa: number;
+  readonly prismStrengthMPa: number;
+  readonly designCompressiveResistanceMPa: number;
+  readonly axialStressMPa: number;
   readonly parallel: MasonryDirectionResult;
   readonly perpendicular: MasonryDirectionResult;
   readonly designShearKNPerM: number;
@@ -105,6 +110,8 @@ export function designMasonryPanel(
 ): CalculationBundle<MasonryDesignResult> {
   const profileErrors = validateStructuralProfile(profile);
   if (profileErrors.length > 0) throw new RangeError(profileErrors.join(" "));
+  const prismStrengthMPa = input.prismStrengthMPa ?? 4;
+  const axialStressKPa = input.axialStressKPa ?? 0;
   const numericInputs = {
     panelLengthMm: input.panelLengthMm,
     panelHeightMm: input.panelHeightMm,
@@ -113,12 +120,16 @@ export function designMasonryPanel(
     barDiameterMm: input.barDiameterMm,
     leverArmFactor: input.leverArmFactor,
     flexuralTensileStrengthParallelMPa: input.flexuralTensileStrengthParallelMPa,
-    flexuralTensileStrengthPerpendicularMPa: input.flexuralTensileStrengthPerpendicularMPa
+    flexuralTensileStrengthPerpendicularMPa: input.flexuralTensileStrengthPerpendicularMPa,
+    prismStrengthMPa
   };
   for (const [field, value] of Object.entries(numericInputs)) {
     if (!Number.isFinite(value) || value <= 0) {
       throw new RangeError(`${field} deve ser positivo e finito.`);
     }
+  }
+  if (!Number.isFinite(axialStressKPa) || axialStressKPa < 0) {
+    throw new RangeError("axialStressKPa deve ser finito e nao negativo.");
   }
   const effectiveDepthMm = input.wallThicknessMm - input.reinforcementCoverMm;
   if (effectiveDepthMm <= 0) {
@@ -176,6 +187,8 @@ export function designMasonryPanel(
     horizontalSlendernessRatio,
     profile.masonryServiceabilityBoundary
   );
+  const axialStressMPa = axialStressKPa / 1_000;
+  const designCompressiveResistanceMPa = prismStrengthMPa / profile.masonryResistanceFactor;
 
   const checks: EngineeringCheck[] = [
     {
@@ -213,6 +226,14 @@ export function designMasonryPanel(
       message: "Area de armadura perpendicular adotada."
     },
     {
+      id: "masonry-prism-compression",
+      status: axialStressMPa <= designCompressiveResistanceMPa ? "PASS" : "FAIL",
+      demand: axialStressMPa,
+      resistance: designCompressiveResistanceMPa,
+      unit: "MPa",
+      message: "Compressão axial na base verificada contra a resistência de cálculo do prisma."
+    },
+    {
       id: "masonry-shear",
       status: designShearStressMPa <= designShearResistanceMPa ? "PASS" : "FAIL",
       demand: designShearStressMPa,
@@ -244,6 +265,9 @@ export function designMasonryPanel(
     value: {
       effectiveDepthMm,
       designSteelStrengthMPa: profile.steelYieldStrengthMPa / profile.steelResistanceFactor,
+      prismStrengthMPa,
+      designCompressiveResistanceMPa,
+      axialStressMPa,
       parallel,
       perpendicular,
       designShearKNPerM,
@@ -265,6 +289,14 @@ export function designMasonryPanel(
         unit: "mm2/m"
       },
       {
+        id: "wall-prism-compression",
+        description: "Resistência de cálculo à compressão baseada no prisma",
+        equation: "f_pd = f_pk / gamma_m",
+        substitutions: { f_pk: prismStrengthMPa, gamma_m: profile.masonryResistanceFactor },
+        result: designCompressiveResistanceMPa,
+        unit: "MPa"
+      },
+      {
         id: "wall-shear-resistance",
         description: "Resistencia caracteristica ao cisalhamento limitada",
         equation: "fvk = min(fv0 + k_rho * rho, fv_max)",
@@ -281,7 +313,8 @@ export function designMasonryPanel(
     warnings: [
       "O limite de ELS foi digitalizado de figura de baixa resolucao e serve apenas para triagem.",
       "Barras calculadas devem ser envolvidas por graute e detalhadas por responsavel tecnico.",
-      ...(profile.status === "draft" ? ["Perfil estrutural academico ainda nao revisado."] : [])
+      "A resistência do prisma deve corresponder ao sistema de bloco, argamassa e graute efetivamente especificado.",
+      ...(profile.status === "draft" ? ["Perfil estrutural ainda nao revisado para emissão executiva."] : [])
     ]
   };
 }
