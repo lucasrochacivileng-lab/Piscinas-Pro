@@ -1,4 +1,5 @@
 import type { IntegratedDesignInput, IntegratedDesignResult } from "@poolstruct/calculation-engine";
+import { normalizeIntegratedDesignInput, type StoredDesignResult } from "./compatibility";
 import type { Json } from "./database.types";
 import { sha256 } from "./hash";
 import type { NewProject, ProjectRecord, ProjectRepository, RevisionRecord } from "./models";
@@ -11,12 +12,10 @@ interface LocalDatabase {
 
 const toJson = (value: unknown): Json => value as Json;
 
-const resultSummary = (result: IntegratedDesignResult): Json => ({
+const resultSummary = (result: StoredDesignResult): Json => ({
   overallStatus: result.overallStatus,
   capacityLitres: result.hydrostatic.approximateCapacityLitres,
   maximumWallPressureKPa: result.hydrostatic.maximumWallPressureKPa,
-  flotationSafetyFactor: result.geotechnical.flotation.safetyFactor,
-  structuralProfileId: result.normativeProfile.id,
   checks: result.checks.length
 });
 
@@ -36,6 +35,11 @@ const mapProject = (row: {
   status: row.status,
   createdAt: row.created_at,
   updatedAt: row.updated_at
+});
+
+const normalizeRevision = (revision: RevisionRecord): RevisionRecord => ({
+  ...revision,
+  input: normalizeIntegratedDesignInput(revision.input)
 });
 
 export class LocalProjectRepository implements ProjectRepository {
@@ -62,8 +66,13 @@ export class LocalProjectRepository implements ProjectRepository {
     const database = this.read();
     const now = new Date().toISOString();
     const record: ProjectRecord = {
-      id: crypto.randomUUID(), ownerId: this.ownerId, name: project.name.trim(),
-      location: project.location.trim(), status: "draft", createdAt: now, updatedAt: now
+      id: crypto.randomUUID(),
+      ownerId: this.ownerId,
+      name: project.name.trim(),
+      location: project.location.trim(),
+      status: "draft",
+      createdAt: now,
+      updatedAt: now
     };
     database.projects.push(record);
     this.write(database);
@@ -81,6 +90,7 @@ export class LocalProjectRepository implements ProjectRepository {
   async listRevisions(projectId: string): Promise<RevisionRecord[]> {
     return this.read().revisions
       .filter((revision) => revision.projectId === projectId)
+      .map(normalizeRevision)
       .sort((left, right) => right.revisionNumber - left.revisionNumber);
   }
 
@@ -96,8 +106,13 @@ export class LocalProjectRepository implements ProjectRepository {
       .filter((revision) => revision.projectId === projectId)
       .reduce((maximum, revision) => Math.max(maximum, revision.revisionNumber), 0) + 1;
     const record: RevisionRecord = {
-      id: crypto.randomUUID(), projectId, revisionNumber, input, result,
-      inputHash: await sha256(input), createdAt: new Date().toISOString()
+      id: crypto.randomUUID(),
+      projectId,
+      revisionNumber,
+      input,
+      result,
+      inputHash: await sha256(input),
+      createdAt: new Date().toISOString()
     };
     database.revisions.push(record);
     database.projects = database.projects.map((item) => item.id === projectId
@@ -121,7 +136,9 @@ export class SupabaseProjectRepository implements ProjectRepository {
 
   async createProject(project: NewProject): Promise<ProjectRecord> {
     const { data, error } = await supabase!.from("projects").insert({
-      owner_id: this.ownerId, name: project.name.trim(), location: project.location.trim()
+      owner_id: this.ownerId,
+      name: project.name.trim(),
+      location: project.location.trim()
     }).select().single();
     if (error) throw error;
     return mapProject(data);
@@ -140,14 +157,14 @@ export class SupabaseProjectRepository implements ProjectRepository {
     if (revisionsResponse.error) throw revisionsResponse.error;
     if (runsResponse.error) throw runsResponse.error;
     const runs = new Map(runsResponse.data.map((run) => [run.revision_id, run]));
-    return revisionsResponse.data.flatMap((revision): RevisionRecord[] => {
+    return revisionsResponse.data.flatMap((revision) => {
       const run = runs.get(revision.id);
       return run ? [{
         id: revision.id,
         projectId: revision.project_id,
         revisionNumber: revision.revision_number,
-        input: revision.input_snapshot as unknown as IntegratedDesignInput,
-        result: run.full_result as unknown as IntegratedDesignResult,
+        input: normalizeIntegratedDesignInput(revision.input_snapshot),
+        result: run.full_result as unknown as StoredDesignResult,
         inputHash: run.input_hash,
         createdAt: revision.created_at
       }] : [];
@@ -176,8 +193,13 @@ export class SupabaseProjectRepository implements ProjectRepository {
     const saved = data[0];
     if (!saved) throw new Error("A revisão não foi persistida.");
     return {
-      id: saved.revision_id, projectId, revisionNumber: saved.revision_number,
-      input, result, inputHash, createdAt: new Date().toISOString()
+      id: saved.revision_id,
+      projectId,
+      revisionNumber: saved.revision_number,
+      input,
+      result,
+      inputHash,
+      createdAt: new Date().toISOString()
     };
   }
 }
