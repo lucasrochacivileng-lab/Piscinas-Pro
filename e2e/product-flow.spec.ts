@@ -92,11 +92,12 @@ test("modela prainha, fundo principal e parede de degrau", async ({ page }) => {
   await lengthInputs.nth(1).fill("6400");
   await page.getByRole("button", { name: "Calcular e salvar revisão" }).click();
 
-  await expect(page.getByRole("heading", { name: "Zonas de profundidade" })).toBeVisible();
-  await expect(page.getByText("Prainha", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText(/degrau/i).first()).toBeVisible();
-  await expect(page.getByText("2 zona(s)", { exact: true })).toBeVisible();
-  const panelMetric = page.locator(".metrics article").filter({ hasText: "Paredes calculadas" });
+  const results = page.locator(".results-panel");
+  await expect(results.getByRole("heading", { name: "Zonas de profundidade" })).toBeVisible();
+  await expect(results.getByText("Prainha", { exact: true })).toBeVisible();
+  await expect(results.getByText(/degrau/i).first()).toBeVisible();
+  await expect(results.getByText("2 zona(s)", { exact: true })).toBeVisible();
+  const panelMetric = results.locator(".metrics article").filter({ hasText: "Paredes calculadas" });
   await expect(panelMetric).toContainText("7");
 });
 
