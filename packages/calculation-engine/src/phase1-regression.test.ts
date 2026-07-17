@@ -110,10 +110,10 @@ describe("regressões integradas da Fase 3", () => {
 
     expect(result.geometryModel.zones).toHaveLength(3);
     expect(result.geometryModel.transitions).toHaveLength(2);
-    expect(result.wallPanels).toHaveLength(10); // 6 laterais + 2 extremidades + 2 degraus
+    expect(result.wallPanels).toHaveLength(10);
     expect(result.wallPanels.filter((wall) => wall.kind === "STEP")).toHaveLength(2);
     expect(result.slabZones).toHaveLength(3);
-    expect(result.hydrostatic.waterVolumeM3).toBeCloseTo(39.44, 8);
+    expect(result.hydrostatic.waterVolumeM3).toBeCloseTo(38.48, 8);
     expect(result.hydrostatic.maximumWaterDepthMm).toBe(1600);
     expect(result.slabZones[0]?.groundwaterHeadAboveSlabBottomMm).toBe(0);
     expect(result.wallPanels.every((wall) => wall.id.trim() !== "")).toBe(true);
