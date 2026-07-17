@@ -103,11 +103,11 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
       <NumberField label="Peso específico do solo saturado" value={input.saturatedSoilUnitWeightKNM3} unit="kN/m³" step={0.1} onChange={(value) => setValue("saturatedSoilUnitWeightKNM3", value)} />
       <NumberField label="Ângulo de atrito" value={input.soilFrictionAngleDegrees} unit="graus" step={0.1} onChange={(value) => setValue("soilFrictionAngleDegrees", value)} />
       <NumberField label="Nível d'água sob a laje" value={input.groundwaterHeadAboveSlabBottomMm} unit="mm" onChange={(value) => setValue("groundwaterHeadAboveSlabBottomMm", value)} />
-      <NumberField label="Sobrecarga no fundo" value={input.imposedFloorLoadKPa} unit="kPa" step={0.1} onChange={(value) => setValue("imposedFloorLoadKPa", value)} />
+      <NumberField label="Sobrecarga de utilização no fundo" value={input.imposedFloorLoadKPa} unit="kPa" step={0.1} onChange={(value) => setValue("imposedFloorLoadKPa", value)} />
       <NumberField label="Peso específico da alvenaria" value={input.masonryUnitWeightKNM3} unit="kN/m³" step={0.1} onChange={(value) => setValue("masonryUnitWeightKNM3", value)} />
-    </div></fieldset>
+    </div><small>Valor inicial acadêmico: 2,5 kPa, equivalente aproximadamente aos 250 kgf/m² adotados no trabalho de Silva (2022). Confirme para o projeto.</small></fieldset>
     <details><summary>Parâmetros de detalhamento</summary><div className="form-grid detail-grid">
-      <NumberField label="Fator de altura efetiva" value={input.effectiveWallHeightFactor} unit="—" step={0.05} onChange={(value) => setValue("effectiveWallHeightFactor", value)} />
+      <NumberField label="Fator de altura efetiva (hef/h)" value={input.effectiveWallHeightFactor} unit="—" step={0.05} onChange={(value) => setValue("effectiveWallHeightFactor", value)} />
       <NumberField label="Coeficiente de ortogonalidade" value={input.orthogonalityCoefficient} unit="—" step={0.05} onChange={(value) => setValue("orthogonalityCoefficient", value)} />
       <NumberField label="Cobrimento da parede" value={input.reinforcementCoverMm} unit="mm" onChange={(value) => setValue("reinforcementCoverMm", value)} />
       <NumberField label="Diâmetro da barra da parede" value={input.wallBarDiameterMm} unit="mm" step={0.5} onChange={(value) => setValue("wallBarDiameterMm", value)} />
@@ -117,6 +117,6 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
       <NumberField label="Cobrimento da laje" value={input.slabReinforcementCoverMm} unit="mm" onChange={(value) => setValue("slabReinforcementCoverMm", value)} />
       <NumberField label="Diâmetro da barra da laje" value={input.slabBarDiameterMm} unit="mm" step={0.5} onChange={(value) => setValue("slabBarDiameterMm", value)} />
       <NumberField label="Taxa mínima da laje" value={input.minimumSlabSteelRatio} unit="—" step={0.0001} onChange={(value) => setValue("minimumSlabSteelRatio", value)} />
-    </div></details>
+    </div><small>Para parede sem travamento lateral transversal, engastada na base e livre no topo, o valor inicial é hef/h = 2,0. Altere somente quando a condição de apoio e os travamentos justificarem.</small></details>
   </form>;
 }
