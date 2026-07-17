@@ -154,8 +154,8 @@ export function App() {
 
   const applyCadEnvelope = useCallback((cad: { lengthMm: number; widthMm: number; maximumDepthMm?: number }) => {
     setEditorInput((current) => {
-      const targetLengthMm = Math.max(cad.lengthMm, cad.widthMm);
-      const targetWidthMm = Math.min(cad.lengthMm, cad.widthMm);
+      const targetLengthMm = Math.round(Math.max(cad.lengthMm, cad.widthMm));
+      const targetWidthMm = Math.round(Math.min(cad.lengthMm, cad.widthMm));
       const existingZones = current.geometry.depthZones && current.geometry.depthZones.length > 0
         ? [...current.geometry.depthZones]
         : [{
