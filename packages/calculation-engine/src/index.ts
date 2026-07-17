@@ -5,6 +5,28 @@ export {
   SILVA_2022_PHASE1_PROFILE
 } from "./profiles.js";
 export {
+  findBlockWebRequirement,
+  findClassCUseLimit,
+  findNominalBlockFamily,
+  inferLegacyConcreteBlockClass,
+  minimumMiterRadiusMm,
+  NBR_6136_1_2026_CLASS_C_USE_LIMITS,
+  NBR_6136_1_2026_DIMENSIONAL_TOLERANCES,
+  NBR_6136_1_2026_MINIMUM_MITER_RADIUS_MM,
+  NBR_6136_1_2026_NOMINAL_FAMILIES,
+  NBR_6136_1_2026_STRENGTH_RULES,
+  NBR_6136_1_2026_WEB_REQUIREMENTS,
+  validateConcreteBlockStrength
+} from "./block-standard.js";
+export type {
+  BlockWebRequirement,
+  ClassCUseLimit,
+  ConcreteBlockClass,
+  ConcreteBlockStrengthRule,
+  ConcreteBlockStrengthValidation,
+  NominalBlockFamilyDimensions
+} from "./block-standard.js";
+export {
   barAreaMm2,
   selectBarLayout,
   validateStructuralProfile
