@@ -5,9 +5,10 @@ const unexpectedErrors = new WeakMap<Page, string[]>();
 
 async function createProject(page: Page, name: string, location = "João Pessoa - PB") {
   await page.getByRole("button", { name: "Novo projeto" }).click();
-  await page.getByLabel("Nome").fill(name);
-  await page.getByLabel("Local").fill(location);
-  await page.getByRole("button", { name: "Criar projeto" }).click();
+  const navigator = page.locator("aside.navigator");
+  await navigator.getByLabel("Nome").fill(name);
+  await navigator.getByLabel("Local").fill(location);
+  await navigator.getByRole("button", { name: "Criar projeto" }).click();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -81,8 +82,8 @@ test("modela prainha, fundo principal e parede de degrau", async ({ page }) => {
   await createProject(page, "Piscina com Prainha");
   await page.getByRole("button", { name: "Adicionar zona" }).click();
 
-  const depthInputs = page.getByRole("spinbutton", { name: /Profundidade d'água/ });
-  const lengthInputs = page.getByRole("spinbutton", { name: "Comprimento", exact: true });
+  const depthInputs = page.getByRole("spinbutton", { name: /^Profundidade d'água mm$/ });
+  const lengthInputs = page.getByRole("spinbutton", { name: /^Comprimento mm$/ });
   await expect(depthInputs).toHaveCount(2);
   await expect(lengthInputs).toHaveCount(2);
   await depthInputs.nth(0).fill("400");
@@ -95,7 +96,8 @@ test("modela prainha, fundo principal e parede de degrau", async ({ page }) => {
   await expect(page.getByText("Prainha", { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/degrau/i).first()).toBeVisible();
   await expect(page.getByText("2 zona(s)", { exact: true })).toBeVisible();
-  await expect(page.getByText("7", { exact: true }).first()).toBeVisible();
+  const panelMetric = page.locator(".metrics article").filter({ hasText: "Paredes calculadas" });
+  await expect(panelMetric).toContainText("7");
 });
 
 test("mantém projetos de navegação separados e permite arquivamento", async ({ page }) => {
@@ -112,15 +114,16 @@ test("mantém projetos de navegação separados e permite arquivamento", async (
 
 test("correlaciona falha de cálculo sem vazar mensagem interna", async ({ page }) => {
   await createProject(page, "Piscina Inválida");
-  await page.getByRole("spinbutton", { name: /Profundidade d'água/ }).fill("0");
+  await page.getByText("Parâmetros de detalhamento", { exact: true }).click();
+  await page.getByRole("spinbutton", { name: /Fator de altura efetiva/ }).fill("0");
   await page.getByRole("button", { name: "Calcular e salvar revisão" }).click();
 
   const alert = page.getByRole("alert");
   await expect(alert).toContainText("Não foi possível executar o cálculo.");
   await expect(alert).toContainText(/Código do incidente: [0-9a-f-]{36}/);
-  await expect(alert).not.toContainText("waterDepthMm");
+  await expect(alert).not.toContainText("effectiveHeightFactor");
 
   const events = await page.evaluate(() => localStorage.getItem("poolstruct:operational-events"));
   expect(events).toContain("calculation_or_save_failed");
-  expect(events).not.toContain("waterDepthMm");
+  expect(events).not.toContain("effectiveHeightFactor");
 });
