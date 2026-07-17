@@ -11,6 +11,7 @@ import {
 } from "./masonry-materials.js";
 import { runPhase1Design, type Phase1DesignInput, type Phase1DesignResult } from "./phase1.js";
 import { findStructuralProfile } from "./profiles.js";
+import { enhanceSlopedBeachDesign } from "./sloped-beach.js";
 
 export interface IntegratedDesignInput extends Phase1DesignInput {
   readonly structuralProfileId: string;
@@ -19,7 +20,7 @@ export interface IntegratedDesignInput extends Phase1DesignInput {
 }
 
 export interface IntegratedDesignResult extends Phase1DesignResult {
-  readonly integrationVersion: "geotech-normative-1.0.0";
+  readonly integrationVersion: "geotech-normative-1.1.0";
   readonly geotechnical: GeotechnicalResult;
   readonly masonryMaterials: MasonryMaterialResult;
   readonly normativeProfile: {
@@ -64,7 +65,8 @@ export function runIntegratedDesign(input: IntegratedDesignInput): IntegratedDes
     soilFrictionAngleDegrees: geotechnical.wallSoil.frictionAngleDegrees,
     groundwaterHeadAboveSlabBottomMm: geotechnical.flotation.waterTableHeadAboveDeepestSlabBottomMm
   };
-  const structural = runPhase1Design(soilAdjustedInput, profile);
+  const baseStructural = runPhase1Design(soilAdjustedInput, profile);
+  const structural = enhanceSlopedBeachDesign(soilAdjustedInput, profile, baseStructural);
   const profileCheck: EngineeringCheck = {
     id: "normative-profile-source",
     status: profile.sourceKind === "normative" && profile.status === "reviewed" ? "PASS" : "REQUIRES_REVIEW",
@@ -84,7 +86,7 @@ export function runIntegratedDesign(input: IntegratedDesignInput): IntegratedDes
 
   return {
     ...structural,
-    integrationVersion: "geotech-normative-1.0.0",
+    integrationVersion: "geotech-normative-1.1.0",
     geotechnical,
     masonryMaterials,
     normativeProfile: {
