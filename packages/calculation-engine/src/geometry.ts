@@ -40,6 +40,8 @@ export interface PoolStepTransition {
 }
 
 export interface PoolGeometryModel {
+  readonly internalLengthMm: number;
+  readonly internalWidthMm: number;
   readonly zones: readonly NormalizedDepthZone[];
   readonly transitions: readonly PoolStepTransition[];
   readonly wallPanels: readonly GeometricWallPanel[];
@@ -178,6 +180,8 @@ export function buildPoolGeometryModel(geometry: PoolGeometryInput): PoolGeometr
   const maximumWaterDepthMm = Math.max(...depths);
   const minimumWaterDepthMm = Math.min(...depths);
   return {
+    internalLengthMm: geometry.internalLengthMm,
+    internalWidthMm: geometry.internalWidthMm,
     zones,
     transitions,
     wallPanels,

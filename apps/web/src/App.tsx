@@ -1,13 +1,19 @@
-import { runPhase1Design, SILVA_2022_PHASE1_PROFILE, type Phase1DesignInput, type Phase1DesignResult } from "@poolstruct/calculation-engine";
+import { runIntegratedDesign, type IntegratedDesignInput } from "@poolstruct/calculation-engine";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./auth/auth-context";
 import { AuthScreen } from "./components/AuthScreen";
 import { CalculationEditor } from "./components/CalculationEditor";
 import { DrawingPanel } from "./components/DrawingPanel";
+import { GeotechnicalPanel } from "./components/GeotechnicalPanel";
 import { MasonryPanel } from "./components/MasonryPanel";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ResultDashboard } from "./components/ResultDashboard";
 import { RevisionHistory } from "./components/RevisionHistory";
+import {
+  isIntegratedDesignResult,
+  normalizeIntegratedDesignInput,
+  type StoredDesignResult
+} from "./lib/compatibility";
 import { DEFAULT_DESIGN_INPUT } from "./lib/defaults";
 import { DRAWING_SHEET } from "./lib/drawing";
 import type { NewProject, ProjectRecord, RevisionRecord } from "./lib/models";
@@ -26,8 +32,8 @@ export function App() {
   const [activeProject, setActiveProject] = useState<ProjectRecord | null>(null);
   const [revisions, setRevisions] = useState<RevisionRecord[]>([]);
   const [activeRevision, setActiveRevision] = useState<RevisionRecord | null>(null);
-  const [editorInput, setEditorInput] = useState<Phase1DesignInput>(DEFAULT_DESIGN_INPUT);
-  const [result, setResult] = useState<Phase1DesignResult | null>(null);
+  const [editorInput, setEditorInput] = useState<IntegratedDesignInput>(DEFAULT_DESIGN_INPUT);
+  const [result, setResult] = useState<StoredDesignResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ErrorNotice | null>(null);
 
@@ -38,10 +44,7 @@ export function App() {
     fallback: string
   ) => {
     const incident = await reportOperationalError(eventType, messageCode, reason, user?.id);
-    setError({
-      message: fallback,
-      correlationId: incident.correlationId
-    });
+    setError({ message: fallback, correlationId: incident.correlationId });
   }, [user?.id]);
 
   const refreshProjects = useCallback(async () => {
@@ -63,7 +66,7 @@ export function App() {
       setRevisions(records);
       const latest = records[0];
       setActiveRevision(latest ?? null);
-      setEditorInput(latest?.input ?? DEFAULT_DESIGN_INPUT);
+      setEditorInput(normalizeIntegratedDesignInput(latest?.input ?? DEFAULT_DESIGN_INPUT));
       setResult(latest?.result ?? null);
     } catch (reason) {
       await handleFailure("repository_error", "revision_list_failed", reason, "Falha ao carregar revisões.");
@@ -97,15 +100,16 @@ export function App() {
     }
   }
 
-  async function calculate(input: Phase1DesignInput) {
+  async function calculate(input: IntegratedDesignInput) {
     if (!repository || !activeProject) return;
     setBusy(true);
     setError(null);
     try {
-      const calculation = runPhase1Design(input, SILVA_2022_PHASE1_PROFILE);
-      const revision = await repository.saveRevision(activeProject.id, input, calculation);
+      const normalizedInput = normalizeIntegratedDesignInput(input);
+      const calculation = runIntegratedDesign(normalizedInput);
+      const revision = await repository.saveRevision(activeProject.id, normalizedInput, calculation);
       setActiveProject((current) => current ? { ...current, status: "calculated", updatedAt: revision.createdAt } : current);
-      setEditorInput(input);
+      setEditorInput(normalizedInput);
       setResult(calculation);
       setActiveRevision(revision);
       setRevisions((current) => [revision, ...current]);
@@ -119,7 +123,7 @@ export function App() {
 
   function openRevision(revision: RevisionRecord) {
     setActiveRevision(revision);
-    setEditorInput(revision.input);
+    setEditorInput(normalizeIntegratedDesignInput(revision.input));
     setResult(revision.result);
   }
 
@@ -127,6 +131,9 @@ export function App() {
   if (!user) return <AuthScreen />;
 
   const statusClass = result?.overallStatus === "PASS" ? "sb-pass" : result?.overallStatus === "FAIL" ? "sb-fail" : "sb-review";
+  const engineLabel = result
+    ? isIntegratedDesignResult(result) ? result.integrationVersion : result.engineVersion
+    : null;
 
   return <div className="app-shell">
     <header className="topbar">
@@ -144,12 +151,14 @@ export function App() {
         {!activeProject ? <section className="welcome-card"><div>
           <p className="eyebrow">Ambiente de dimensionamento</p>
           <h1>Nenhum projeto aberto</h1>
-          <p>Crie ou selecione um projeto no navegador à esquerda para carregar o modelo estrutural, as revisões imutáveis e a prancha PS-01.</p>
-          <div className="welcome-features"><span>Motor determinístico</span><span>Prancha A3 vetorial</span><span>Histórico SHA-256</span></div>
+          <p>Crie ou selecione um projeto no navegador à esquerda para carregar o modelo estrutural, geotécnico, normativo e as revisões imutáveis.</p>
+          <div className="welcome-features"><span>Motor determinístico</span><span>SPT por camadas</span><span>Flutuação global</span><span>Histórico SHA-256</span></div>
         </div></section> : <>
           <section className="project-header"><div><h1>{activeProject.name}</h1><p>{activeProject.location || "Local não informado"}</p></div><span className="project-state">{activeProject.status === "calculated" ? "Calculado" : "Rascunho"}</span></section>
           {activeRevision && <DrawingPanel project={activeProject} revision={activeRevision} />}
           {result && <ResultDashboard result={result} />}
+          {result && isIntegratedDesignResult(result) && <GeotechnicalPanel result={result} />}
+          {result && !isIntegratedDesignResult(result) && <section className="results-panel"><div className="warning-box"><strong>Revisão histórica</strong><p>Esta revisão foi calculada antes da integração geotécnica e normativa. Os dados antigos foram preservados; o editor recebeu valores padrão apenas para uma nova revisão.</p></div></section>}
           {result?.masonry && <MasonryPanel masonry={result.masonry} />}
         </>}
       </main>
@@ -161,11 +170,11 @@ export function App() {
       <span>{activeRevision ? `R${activeRevision.revisionNumber}` : "R—"}</span>
       <span>{activeRevision ? `SHA ${activeRevision.inputHash.slice(0, 12)}` : "SHA —"}</span>
       {result && <span className={statusClass}>{result.overallStatus}</span>}
-      {result && <span>motor {result.engineVersion}</span>}
+      {engineLabel && <span>motor {engineLabel}</span>}
       <span className="grow"></span>
       <span>{DRAWING_SHEET.format} · {DRAWING_SHEET.designation}</span>
       <span>mm · kN · MPa</span>
-      <span className="sb-warn">PRÉ-DIMENSIONAMENTO ACADÊMICO</span>
+      <span className="sb-warn">PRÉ-DIMENSIONAMENTO · REVISÃO TÉCNICA OBRIGATÓRIA</span>
     </footer>
   </div>;
 }

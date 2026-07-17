@@ -1,8 +1,11 @@
 export { calculateHydrostaticAction } from "./hydrostatic.js";
 export {
+  BRAZIL_2026_NORMATIVE_REVIEW_PROFILE,
   DEMONSTRATION_PROFILE,
+  findStructuralProfile,
   SILVA_2022_ACADEMIC_PROFILE,
-  SILVA_2022_PHASE1_PROFILE
+  SILVA_2022_PHASE1_PROFILE,
+  STRUCTURAL_PROFILE_REGISTRY
 } from "./profiles.js";
 export {
   findBlockWebRequirement,
@@ -39,6 +42,23 @@ export type {
   StructuralDesignProfile
 } from "./engineering.js";
 export {
+  evaluateGeotechnicalModel,
+  evaluateSptLayer
+} from "./geotechnical.js";
+export type {
+  EvaluatedSoilLayer,
+  GeotechnicalInput,
+  GeotechnicalResult,
+  GlobalFlotationResult,
+  SoilMaterial,
+  SptLayerInput
+} from "./geotechnical.js";
+export { runIntegratedDesign } from "./integrated-design.js";
+export type {
+  IntegratedDesignInput,
+  IntegratedDesignResult
+} from "./integrated-design.js";
+export {
   buildPoolGeometryModel,
   groundwaterHeadAboveZoneSlabBottomMm,
   maximumPoolDepthMm,
@@ -62,6 +82,11 @@ export type {
   MasonryDesignResult,
   MasonryDirectionResult
 } from "./masonry-design.js";
+export { evaluateMasonryMaterials } from "./masonry-materials.js";
+export type {
+  MasonryMaterialInput,
+  MasonryMaterialResult
+} from "./masonry-materials.js";
 export {
   calculateMaterialQuantities,
   DEFAULT_POOL_TAKEOFF_OPTIONS,

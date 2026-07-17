@@ -1,4 +1,5 @@
-import type { Phase1DesignInput, Phase1DesignResult } from "@poolstruct/calculation-engine";
+import type { IntegratedDesignInput, IntegratedDesignResult } from "@poolstruct/calculation-engine";
+import { normalizeIntegratedDesignInput, type StoredDesignResult } from "./compatibility";
 import type { Json } from "./database.types";
 import { sha256 } from "./hash";
 import type { NewProject, ProjectRecord, ProjectRepository, RevisionRecord } from "./models";
@@ -11,7 +12,7 @@ interface LocalDatabase {
 
 const toJson = (value: unknown): Json => value as Json;
 
-const resultSummary = (result: Phase1DesignResult): Json => ({
+const resultSummary = (result: StoredDesignResult): Json => ({
   overallStatus: result.overallStatus,
   capacityLitres: result.hydrostatic.approximateCapacityLitres,
   maximumWallPressureKPa: result.hydrostatic.maximumWallPressureKPa,
@@ -34,6 +35,11 @@ const mapProject = (row: {
   status: row.status,
   createdAt: row.created_at,
   updatedAt: row.updated_at
+});
+
+const normalizeRevision = (revision: RevisionRecord): RevisionRecord => ({
+  ...revision,
+  input: normalizeIntegratedDesignInput(revision.input)
 });
 
 export class LocalProjectRepository implements ProjectRepository {
@@ -84,13 +90,14 @@ export class LocalProjectRepository implements ProjectRepository {
   async listRevisions(projectId: string): Promise<RevisionRecord[]> {
     return this.read().revisions
       .filter((revision) => revision.projectId === projectId)
+      .map(normalizeRevision)
       .sort((left, right) => right.revisionNumber - left.revisionNumber);
   }
 
   async saveRevision(
     projectId: string,
-    input: Phase1DesignInput,
-    result: Phase1DesignResult
+    input: IntegratedDesignInput,
+    result: IntegratedDesignResult
   ): Promise<RevisionRecord> {
     const database = this.read();
     const project = database.projects.find((item) => item.id === projectId);
@@ -156,8 +163,8 @@ export class SupabaseProjectRepository implements ProjectRepository {
         id: revision.id,
         projectId: revision.project_id,
         revisionNumber: revision.revision_number,
-        input: revision.input_snapshot as unknown as Phase1DesignInput,
-        result: run.full_result as unknown as Phase1DesignResult,
+        input: normalizeIntegratedDesignInput(revision.input_snapshot),
+        result: run.full_result as unknown as StoredDesignResult,
         inputHash: run.input_hash,
         createdAt: revision.created_at
       }] : [];
@@ -166,16 +173,16 @@ export class SupabaseProjectRepository implements ProjectRepository {
 
   async saveRevision(
     projectId: string,
-    input: Phase1DesignInput,
-    result: Phase1DesignResult
+    input: IntegratedDesignInput,
+    result: IntegratedDesignResult
   ): Promise<RevisionRecord> {
     const inputHash = await sha256(input);
     const { data, error } = await supabase!.rpc("save_calculation_revision", {
       target_project_id: projectId,
       new_input_snapshot: toJson(input),
-      new_engine_version: result.engineVersion,
-      new_profile_id: result.profileId,
-      new_profile_version: result.profileVersion,
+      new_engine_version: result.integrationVersion,
+      new_profile_id: result.normativeProfile.id,
+      new_profile_version: result.normativeProfile.version,
       new_overall_status: result.overallStatus,
       new_input_hash: inputHash,
       new_result_summary: resultSummary(result),
