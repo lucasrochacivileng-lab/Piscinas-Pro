@@ -53,9 +53,14 @@ export type {
   PriceTable
 } from "./costing.js";
 export {
+  BLB_BLOCK_FAMILY_15X30,
+  BLB_BLOCK_FAMILY_15X40,
+  BLB_BLOCK_FAMILY_20X40,
   BLOCK_FAMILY_M15,
   BLOCK_FAMILY_M20,
   DEFAULT_BLOCK_FAMILIES,
+  JB_BLOCK_FAMILY_15X40,
+  JB_BLOCK_FAMILY_20X40,
   layoutCourse,
   modulatePoolPerimeter,
   modulateWall,

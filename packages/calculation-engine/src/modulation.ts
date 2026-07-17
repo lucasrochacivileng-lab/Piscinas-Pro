@@ -14,7 +14,16 @@ import type { TraceStep } from "./types.js";
  * de amarracao, ancoragem, emendas e compatibilizacao por engenheiro habilitado.
  */
 
-export type BlockRole = "full" | "half" | "channel";
+export type BlockRole =
+  | "full"
+  | "half"
+  | "channel"
+  | "half-channel"
+  | "compensator"
+  | "l-bond"
+  | "t-bond"
+  | "j-block"
+  | "special";
 
 export interface BlockUnit {
   readonly id: string;
@@ -22,6 +31,8 @@ export interface BlockUnit {
   readonly role: BlockRole;
   /** Comprimento nominal (bloco + junta vertical), multiplo do modulo. */
   readonly nominalLengthMm: number;
+  /** Dimensao real da peca sem a junta vertical. */
+  readonly actualLengthMm?: number;
   /** Canaleta em U para cinta/verga e graute horizontal. */
   readonly isChannel: boolean;
 }
@@ -30,7 +41,13 @@ export interface BlockFamily {
   readonly id: string;
   readonly label: string;
   readonly version: string;
-  readonly status: "draft" | "reviewed";
+  readonly status: "draft" | "catalog" | "reviewed";
+  readonly manufacturer: string;
+  readonly material: "concrete";
+  /** Designacao dimensional da Tabela 1 da ABNT NBR 6136. */
+  readonly normativeFamily: string;
+  /** Menor incremento de coordenacao admitido pela familia. */
+  readonly coordinationGridMm: number;
   /** Modulo de coordenacao horizontal e vertical (meio bloco nominal). */
   readonly moduleMm: number;
   /** Altura nominal da fiada (bloco + junta horizontal). */
@@ -38,12 +55,16 @@ export interface BlockFamily {
   /** Largura nominal do bloco (espessura de parede coordenada). */
   readonly nominalWidthMm: number;
   readonly jointThicknessMm: number;
+  readonly catalogStrengthRangeMPa: readonly [number, number];
+  readonly catalogDocument: string;
   readonly units: readonly BlockUnit[];
   readonly references: readonly string[];
 }
 
 export interface CoursePlacement {
-  readonly role: BlockRole;
+  readonly role: "full" | "half" | "channel";
+  readonly unitId: string;
+  readonly label: string;
   readonly nominalLengthMm: number;
   /** Posicao de inicio da peca, em modulos a partir da extremidade esquerda. */
   readonly startModule: number;
@@ -106,6 +127,8 @@ export interface JunctionPlan {
   readonly evenCourseRunningDirection: "long" | "short";
   readonly oddCourseRunningDirection: "long" | "short";
   readonly groutedCorners: number;
+  readonly lBondUnit?: BlockUnit;
+  readonly tBondUnit?: BlockUnit;
   readonly notes: readonly string[];
 }
 
@@ -155,12 +178,18 @@ function unitByRole(family: BlockFamily, role: BlockRole): BlockUnit | undefined
   return family.units.find((unit) => unit.role === role);
 }
 
+function channelUnitForLength(family: BlockFamily, nominalLengthMm: number): BlockUnit | undefined {
+  return family.units.find(
+    (unit) => unit.isChannel && Math.abs(unit.nominalLengthMm - nominalLengthMm) <= MODULE_TOLERANCE
+  );
+}
+
 export function validateBlockFamily(family: BlockFamily): string[] {
   const errors: string[] = [];
   if (family.id.trim() === "" || family.version.trim() === "") {
     errors.push("A familia de blocos deve ter id e versao.");
   }
-  for (const field of ["moduleMm", "courseHeightMm", "nominalWidthMm", "jointThicknessMm"] as const) {
+  for (const field of ["coordinationGridMm", "moduleMm", "courseHeightMm", "nominalWidthMm", "jointThicknessMm"] as const) {
     const value = family[field];
     if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
       errors.push(`${field} deve ser positivo e finito.`);
@@ -176,10 +205,16 @@ export function validateBlockFamily(family: BlockFamily): string[] {
   if (half && Math.abs(half.nominalLengthMm - family.moduleMm) > MODULE_TOLERANCE) {
     errors.push("O meio bloco deve medir um modulo nominal.");
   }
+  if (!channelUnitForLength(family, full?.nominalLengthMm ?? 0)) {
+    errors.push("A familia deve conter canaleta inteira compatível com o bloco inteiro.");
+  }
+  if (!channelUnitForLength(family, half?.nominalLengthMm ?? 0)) {
+    errors.push("A familia deve conter meia canaleta compatível com o meio bloco.");
+  }
   for (const unit of family.units) {
-    const modules = unit.nominalLengthMm / family.moduleMm;
+    const modules = unit.nominalLengthMm / family.coordinationGridMm;
     if (!Number.isFinite(modules) || Math.abs(modules - Math.round(modules)) > MODULE_TOLERANCE) {
-      errors.push(`A peca ${unit.id} deve ser multiplo inteiro do modulo.`);
+      errors.push(`A peca ${unit.id} deve ser multiplo inteiro da malha de coordenacao.`);
     }
   }
   return errors;
@@ -208,9 +243,17 @@ export function layoutCourse(
   let position = 0;
   let remaining = moduleCount;
   const place = (unit: BlockUnit, modules: number): void => {
+    const placedUnit = isChannelCourse
+      ? channelUnitForLength(family, unit.nominalLengthMm)
+      : unit;
+    if (!placedUnit) {
+      throw new RangeError(`Canaleta ausente para o comprimento nominal ${unit.nominalLengthMm} mm.`);
+    }
     placements.push({
-      role: isChannelCourse ? "channel" : unit.role,
-      nominalLengthMm: unit.nominalLengthMm,
+      role: isChannelCourse ? "channel" : unit.role === "half" ? "half" : "full",
+      unitId: placedUnit.id,
+      label: placedUnit.label,
+      nominalLengthMm: placedUnit.nominalLengthMm,
       startModule: position
     });
     position += modules;
@@ -271,7 +314,7 @@ export function suggestModularAdjustments(
     }
   ];
   const compensator = family.units.find(
-    (unit) => Math.abs(unit.nominalLengthMm - residualMm) <= MODULE_TOLERANCE
+    (unit) => unit.role === "compensator" && Math.abs(unit.nominalLengthMm - residualMm) <= MODULE_TOLERANCE
   );
   if (compensator) {
     adjustments.push({
@@ -408,6 +451,8 @@ export function modulatePoolPerimeter(
   const groutSpacingModules = input.verticalGroutSpacingMm / family.moduleMm;
   const groutSpacingIsModular =
     Math.abs(groutSpacingModules - Math.round(groutSpacingModules)) <= MODULE_TOLERANCE;
+  const lBondUnit = family.units.find((unit) => unit.role === "l-bond");
+  const tBondUnit = family.units.find((unit) => unit.role === "t-bond");
 
   const junction: JunctionPlan = {
     cornerCount: 4,
@@ -415,8 +460,16 @@ export function modulatePoolPerimeter(
     evenCourseRunningDirection: "long",
     oddCourseRunningDirection: "short",
     groutedCorners: 4,
+    ...(lBondUnit ? { lBondUnit } : {}),
+    ...(tBondUnit ? { tBondUnit } : {}),
     notes: [
       "Cada canto alterna a parede passante entre fiada e contra-fiada para amarrar o encontro em L.",
+      lBondUnit
+        ? `A família oferece ${lBondUnit.label} para encontro em L.`
+        : "O catálogo não declara bloco L para esta família; detalhar o canto por alternância de fiadas.",
+      tBondUnit
+        ? `A família oferece ${tBondUnit.label} para encontro em T.`
+        : "Bloco T não aplicável ao perímetro retangular simples e não declarado nesta família.",
       thicknessIsModular
         ? "A espessura de parede coincide com a coordenacao modular; o encontro fecha sem peca especial."
         : "A espessura de parede nao e multipla do modulo; o encontro exige peca de amarracao ou ajuste geometrico."
@@ -550,15 +603,21 @@ export const BLOCK_FAMILY_M20: BlockFamily = Object.freeze({
   label: "Família 39 x 19 x 19 (módulo 200 mm)",
   version: "1.0.0",
   status: "draft",
+  manufacturer: "Genérico acadêmico",
+  material: "concrete",
+  normativeFamily: "20 x 40",
+  coordinationGridMm: 100,
   moduleMm: 200,
   courseHeightMm: 200,
   nominalWidthMm: 190,
   jointThicknessMm: 10,
+  catalogStrengthRangeMPa: [0, 0] as const,
+  catalogDocument: "Sem catálogo comercial",
   units: Object.freeze([
     Object.freeze({ id: "m20-full", label: "Bloco inteiro 390", role: "full", nominalLengthMm: 400, isChannel: false }),
     Object.freeze({ id: "m20-half", label: "Meio bloco 190", role: "half", nominalLengthMm: 200, isChannel: false }),
     Object.freeze({ id: "m20-channel", label: "Canaleta 390", role: "channel", nominalLengthMm: 400, isChannel: true }),
-    Object.freeze({ id: "m20-half-channel", label: "Meia canaleta 190", role: "channel", nominalLengthMm: 200, isChannel: true })
+    Object.freeze({ id: "m20-half-channel", label: "Meia canaleta 190", role: "half-channel", nominalLengthMm: 200, isChannel: true })
   ]) as readonly BlockUnit[],
   references: [
     "Familia modular academica compativel com Silva (2022); dimensoes nominais para modulacao."
@@ -571,22 +630,133 @@ export const BLOCK_FAMILY_M15: BlockFamily = Object.freeze({
   label: "Família 29 x 19 x 14 (módulo 150 mm)",
   version: "1.0.0",
   status: "draft",
+  manufacturer: "Genérico acadêmico",
+  material: "concrete",
+  normativeFamily: "15 x 30",
+  coordinationGridMm: 50,
   moduleMm: 150,
   courseHeightMm: 200,
   nominalWidthMm: 140,
   jointThicknessMm: 10,
+  catalogStrengthRangeMPa: [0, 0] as const,
+  catalogDocument: "Sem catálogo comercial",
   units: Object.freeze([
     Object.freeze({ id: "m15-full", label: "Bloco inteiro 290", role: "full", nominalLengthMm: 300, isChannel: false }),
     Object.freeze({ id: "m15-half", label: "Meio bloco 140", role: "half", nominalLengthMm: 150, isChannel: false }),
     Object.freeze({ id: "m15-channel", label: "Canaleta 290", role: "channel", nominalLengthMm: 300, isChannel: true }),
-    Object.freeze({ id: "m15-half-channel", label: "Meia canaleta 140", role: "channel", nominalLengthMm: 150, isChannel: true })
+    Object.freeze({ id: "m15-half-channel", label: "Meia canaleta 140", role: "half-channel", nominalLengthMm: 150, isChannel: true })
   ]) as readonly BlockUnit[],
   references: [
     "Familia modular academica compativel com Silva (2022); dimensoes nominais para modulacao."
   ]
 });
 
+function catalogFamily(input: Omit<BlockFamily, "version" | "status" | "material" | "courseHeightMm" | "jointThicknessMm">): BlockFamily {
+  return Object.freeze({
+    ...input,
+    version: "1.0.0",
+    status: "catalog",
+    material: "concrete",
+    courseHeightMm: 200,
+    jointThicknessMm: 10,
+    units: Object.freeze(input.units.map((unit) => Object.freeze(unit)))
+  });
+}
+
+const standardUnits = (prefix: string, fullActualMm: number, halfActualMm: number, moduleMm: number): BlockUnit[] => [
+  { id: `${prefix}-full`, label: `Bloco inteiro ${fullActualMm}`, role: "full", nominalLengthMm: 2 * moduleMm, actualLengthMm: fullActualMm, isChannel: false },
+  { id: `${prefix}-half`, label: `Meio bloco ${halfActualMm}`, role: "half", nominalLengthMm: moduleMm, actualLengthMm: halfActualMm, isChannel: false },
+  { id: `${prefix}-channel`, label: `Canaleta ${fullActualMm}`, role: "channel", nominalLengthMm: 2 * moduleMm, actualLengthMm: fullActualMm, isChannel: true },
+  { id: `${prefix}-half-channel`, label: `Meia canaleta ${halfActualMm}`, role: "half-channel", nominalLengthMm: moduleMm, actualLengthMm: halfActualMm, isChannel: true },
+  { id: `${prefix}-comp-a`, label: "Compensador 90", role: "compensator", nominalLengthMm: 100, actualLengthMm: 90, isChannel: false },
+  { id: `${prefix}-comp-b`, label: "Compensador 40", role: "compensator", nominalLengthMm: 50, actualLengthMm: 40, isChannel: false }
+];
+
+export const JB_BLOCK_FAMILY_15X40 = catalogFamily({
+  id: "jb-blocks-15x40",
+  label: "JB Blocos · 14 × 19 × 39",
+  manufacturer: "JB Blocos",
+  normativeFamily: "15 x 40",
+  coordinationGridMm: 50,
+  moduleMm: 200,
+  nominalWidthMm: 140,
+  catalogStrengthRangeMPa: [4, 20],
+  catalogDocument: "catalogo-jbblocos.pdf",
+  units: [
+    ...standardUnits("jb15x40", 390, 190, 200),
+    { id: "jb15x40-l", label: "Amarração L 340", role: "l-bond", nominalLengthMm: 350, actualLengthMm: 340, isChannel: false },
+    { id: "jb15x40-t", label: "Amarração T 540", role: "t-bond", nominalLengthMm: 550, actualLengthMm: 540, isChannel: false }
+  ],
+  references: ["Catálogo JB Blocos, linhas estruturais Classes A e B.", "ABNT NBR 6136:2016, Tabelas 1 e 3.", "TQS Alvest, Editor de Fabricantes de Blocos."]
+});
+
+export const JB_BLOCK_FAMILY_20X40 = catalogFamily({
+  id: "jb-blocks-20x40",
+  label: "JB Blocos · 19 × 19 × 39",
+  manufacturer: "JB Blocos",
+  normativeFamily: "20 x 40",
+  coordinationGridMm: 50,
+  moduleMm: 200,
+  nominalWidthMm: 190,
+  catalogStrengthRangeMPa: [4, 20],
+  catalogDocument: "catalogo-jbblocos.pdf",
+  units: standardUnits("jb20x40", 390, 190, 200),
+  references: ["Catálogo JB Blocos, linhas estruturais Classes A e B.", "ABNT NBR 6136:2016, Tabelas 1 e 3.", "TQS Alvest, Editor de Fabricantes de Blocos."]
+});
+
+export const BLB_BLOCK_FAMILY_15X30 = catalogFamily({
+  id: "blb-blocks-15x30",
+  label: "BLB · 14 × 19 × 29",
+  manufacturer: "BLB Blocos",
+  normativeFamily: "15 x 30",
+  coordinationGridMm: 50,
+  moduleMm: 150,
+  nominalWidthMm: 140,
+  catalogStrengthRangeMPa: [4, 22],
+  catalogDocument: "Catalogo-blocos.pdf",
+  units: standardUnits("blb15x30", 290, 140, 150),
+  references: ["Catálogo BLB, Linha 14 e resistência comercial de 4 MPa a 22 MPa.", "ABNT NBR 6136:2016, Tabelas 1 e 3.", "TQS Alvest, Editor de Fabricantes de Blocos."]
+});
+
+export const BLB_BLOCK_FAMILY_15X40 = catalogFamily({
+  id: "blb-blocks-15x40",
+  label: "BLB · 14 × 19 × 39",
+  manufacturer: "BLB Blocos",
+  normativeFamily: "15 x 40",
+  coordinationGridMm: 50,
+  moduleMm: 200,
+  nominalWidthMm: 140,
+  catalogStrengthRangeMPa: [4, 22],
+  catalogDocument: "Catalogo-blocos.pdf",
+  units: [
+    ...standardUnits("blb15x40", 390, 190, 200),
+    { id: "blb15x40-special-290", label: "Especial 290", role: "special", nominalLengthMm: 300, actualLengthMm: 290, isChannel: false },
+    { id: "blb15x40-special-440", label: "Especial 440", role: "special", nominalLengthMm: 450, actualLengthMm: 440, isChannel: false },
+    { id: "blb15x40-special-540", label: "Especial 540", role: "t-bond", nominalLengthMm: 550, actualLengthMm: 540, isChannel: false }
+  ],
+  references: ["Catálogo BLB, Linha 14 e resistência comercial de 4 MPa a 22 MPa.", "ABNT NBR 6136:2016, Tabelas 1 e 3.", "TQS Alvest, Editor de Fabricantes de Blocos."]
+});
+
+export const BLB_BLOCK_FAMILY_20X40 = catalogFamily({
+  id: "blb-blocks-20x40",
+  label: "BLB · 19 × 19 × 39",
+  manufacturer: "BLB Blocos",
+  normativeFamily: "20 x 40",
+  coordinationGridMm: 50,
+  moduleMm: 200,
+  nominalWidthMm: 190,
+  catalogStrengthRangeMPa: [4, 22],
+  catalogDocument: "Catalogo-blocos.pdf",
+  units: standardUnits("blb20x40", 390, 190, 200),
+  references: ["Catálogo BLB, Linha 19 e resistência comercial de 4 MPa a 22 MPa.", "ABNT NBR 6136:2016, Tabelas 1 e 3.", "TQS Alvest, Editor de Fabricantes de Blocos."]
+});
+
 export const DEFAULT_BLOCK_FAMILIES: readonly BlockFamily[] = Object.freeze([
+  JB_BLOCK_FAMILY_20X40,
+  JB_BLOCK_FAMILY_15X40,
+  BLB_BLOCK_FAMILY_20X40,
+  BLB_BLOCK_FAMILY_15X40,
+  BLB_BLOCK_FAMILY_15X30,
   BLOCK_FAMILY_M20,
   BLOCK_FAMILY_M15
 ]);

@@ -65,6 +65,13 @@ describe("fiadas e amarracao", () => {
     const channel = layoutCourse(4, 0, BLOCK_FAMILY_M20, true);
     expect(channel.isChannelCourse).toBe(true);
     expect(channel.placements.every((item) => item.role === "channel")).toBe(true);
+    expect(channel.placements.some((item) => item.unitId.includes("half-channel"))).toBe(false);
+  });
+
+  it("usa meia canaleta real nas fiadas de comprimento ímpar", () => {
+    const channel = layoutCourse(5, 1, BLOCK_FAMILY_M20, true);
+    expect(channel.placements[0]?.unitId).toBe("m20-half-channel");
+    expect(channel.placements[0]?.label).toContain("Meia canaleta");
   });
 });
 

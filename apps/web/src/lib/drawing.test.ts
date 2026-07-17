@@ -26,6 +26,7 @@ describe("buildTechnicalDrawingSvg", () => {
     expect(first).toContain('id="elevacao-parede-longa"');
     expect(first).toContain('class="channel-fill"');
     expect(first).toContain(result.masonry!.family.label);
+    expect(first).toContain(`Classe ${result.masonry!.blockClass}`);
     expect(first).toContain('id="quadro-armaduras"');
   });
 

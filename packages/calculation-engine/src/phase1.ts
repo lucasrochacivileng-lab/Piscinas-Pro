@@ -43,18 +43,23 @@ export interface Phase1DesignInput {
 
 export interface MasonrySpecificationInput {
   readonly blockFamilyId: string;
+  /** fbk especificado para o lote, referido à área bruta. */
+  readonly blockStrengthMPa: number;
   readonly verticalGroutSpacingMm: number;
   readonly bondBeamCourseSpacing: number;
 }
 
 export const DEFAULT_MASONRY_SPECIFICATION: MasonrySpecificationInput = Object.freeze({
-  blockFamilyId: "academic-block-family-m20",
+  blockFamilyId: "jb-blocks-20x40",
+  blockStrengthMPa: 8,
   verticalGroutSpacingMm: 200,
   bondBeamCourseSpacing: 4
 });
 
 export interface Phase1MasonryResult {
   readonly family: BlockFamily;
+  readonly blockStrengthMPa: number;
+  readonly blockClass: "A" | "B" | "C";
   readonly modulation: PoolModulationResult;
   readonly checks: readonly EngineeringCheck[];
   readonly trace: ReturnType<typeof modulatePoolPerimeter>["trace"];
@@ -68,7 +73,7 @@ export interface Phase1WallResult {
 }
 
 export interface Phase1DesignResult {
-  readonly engineVersion: "phase1-1.1.0";
+  readonly engineVersion: "phase1-1.2.0";
   readonly profileId: string;
   readonly profileVersion: string;
   readonly hydrostatic: HydrostaticResult;
@@ -178,6 +183,12 @@ export function runPhase1Design(
   if (!family) {
     throw new RangeError(`Familia de blocos desconhecida: ${masonrySpecification.blockFamilyId}.`);
   }
+  if (!Number.isFinite(masonrySpecification.blockStrengthMPa) || masonrySpecification.blockStrengthMPa < 3) {
+    throw new RangeError("fbk do bloco deve ser finito e igual ou superior a 3 MPa.");
+  }
+  const blockClass = masonrySpecification.blockStrengthMPa >= 8
+    ? "A"
+    : masonrySpecification.blockStrengthMPa >= 4 ? "B" : "C";
   const modulationBundle = modulatePoolPerimeter({
     internalLengthMm: input.geometry.internalLengthMm,
     internalWidthMm: input.geometry.internalWidthMm,
@@ -194,7 +205,48 @@ export function runPhase1Design(
     unit: "certification",
     message: family.status === "reviewed"
       ? "Familia de blocos possui dados tecnicos revisados."
-      : "Familia academica: confirmar fabricante, fbk, prisma, argamassa e graute antes do uso executivo."
+      : family.status === "catalog"
+        ? "Família extraída de catálogo: confirmar certificado, identificação e ensaios do lote fornecido."
+        : "Família acadêmica: confirmar fabricante, fbk, prisma, argamassa e graute antes do uso executivo."
+  };
+  const [catalogMinimumMPa, catalogMaximumMPa] = family.catalogStrengthRangeMPa;
+  const strengthInCatalog = family.status === "draft" || (
+    masonrySpecification.blockStrengthMPa >= catalogMinimumMPa &&
+    masonrySpecification.blockStrengthMPa <= catalogMaximumMPa
+  );
+  const catalogStrengthCheck: EngineeringCheck = {
+    id: "block-strength-in-catalog",
+    status: strengthInCatalog ? (family.status === "draft" ? "REQUIRES_REVIEW" : "PASS") : "FAIL",
+    demand: masonrySpecification.blockStrengthMPa,
+    resistance: catalogMaximumMPa,
+    unit: "MPa",
+    message: family.status === "draft"
+      ? "Família sem faixa resistente de catálogo."
+      : `fbk especificado pertence à faixa comercial declarada de ${catalogMinimumMPa} MPa a ${catalogMaximumMPa} MPa.`
+  };
+  const belowGradeClassCheck: EngineeringCheck = {
+    id: "nbr-6136-below-grade-class-a",
+    status: blockClass === "A" ? "PASS" : "FAIL",
+    demand: masonrySpecification.blockStrengthMPa,
+    resistance: 8,
+    unit: "MPa",
+    message: "Critério conservador da edição 2016 fornecida: aplicação enterrada exige Classe A (fbk ≥ 8 MPa)."
+  };
+  const currentNormativeEditionCheck: EngineeringCheck = {
+    id: "current-block-standard-edition",
+    status: "REQUIRES_REVIEW",
+    demand: 2016,
+    resistance: 2026,
+    unit: "year",
+    message: "A ABNT NBR 6136:2016 foi cancelada em 27/02/2026; revisar o produto e o lote pela série ABNT NBR 6136-1:2026 vigente."
+  };
+  const lotAcceptanceCheck: EngineeringCheck = {
+    id: "nbr-6136-lot-acceptance",
+    status: "REQUIRES_REVIEW",
+    demand: 0,
+    resistance: 1,
+    unit: "document",
+    message: "Confirmar no recebimento do lote: identificação, fbk, classe, dimensões, absorção e ensaios de aceitação."
   };
   const requiredVerticalBarSpacingMm = Math.min(
     longWall.design.perpendicular.layout.spacingMm,
@@ -215,6 +267,10 @@ export function runPhase1Design(
     ...slabBundle.checks,
     ...modulationBundle.checks,
     groutSpacingCheck,
+    catalogStrengthCheck,
+    belowGradeClassCheck,
+    currentNormativeEditionCheck,
+    lotAcceptanceCheck,
     certificationCheck
   ];
   const overallStatus = checks.some((check) => check.governing !== false && check.status === "FAIL")
@@ -224,7 +280,7 @@ export function runPhase1Design(
       : "PASS";
 
   return {
-    engineVersion: "phase1-1.1.0",
+    engineVersion: "phase1-1.2.0",
     profileId: profile.id,
     profileVersion: profile.version,
     hydrostatic: hydrostatic.value,
@@ -234,8 +290,18 @@ export function runPhase1Design(
     slab: slabBundle.value,
     masonry: {
       family,
+      blockStrengthMPa: masonrySpecification.blockStrengthMPa,
+      blockClass,
       modulation: modulationBundle.value,
-      checks: [...modulationBundle.checks, groutSpacingCheck, certificationCheck],
+      checks: [
+        ...modulationBundle.checks,
+        groutSpacingCheck,
+        catalogStrengthCheck,
+        belowGradeClassCheck,
+        currentNormativeEditionCheck,
+        lotAcceptanceCheck,
+        certificationCheck
+      ],
       trace: modulationBundle.trace,
       warnings: modulationBundle.warnings
     },

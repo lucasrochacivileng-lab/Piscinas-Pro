@@ -159,7 +159,7 @@ function wallElevation(input: Phase1DesignInput, result: Phase1DesignResult): st
   const vertical = result.longWall.design.perpendicular.layout;
   const masonry = result.masonry;
   return `<g id="elevacao-parede-longa" data-view="wall-elevation">${text(248, 18, "ELEVAÇÃO — PAREDE LONGA", "view-title")}` +
-    text(248, 23, masonry ? `${masonry.family.label} · ${masonry.modulation.courseCount} fiadas · ${masonry.modulation.totalChannelBlocks} canaletas no perímetro` : "Armaduras esquemáticas · barras em células grauteadas", "note") +
+    text(248, 23, masonry ? `${masonry.family.label} · Classe ${masonry.blockClass} · fbk ${masonry.blockStrengthMPa} MPa · ${masonry.modulation.courseCount} fiadas · ${masonry.modulation.totalChannelBlocks} canaletas` : "Armaduras esquemáticas · barras em células grauteadas", "note") +
     `<rect class="masonry" x="${x}" y="${y}" width="${width}" height="${height}"/>` +
     masonryCourses(x, y, width, height, result) +
     reinforcementLines(x + 2, y + 2, width - 4, height - 4, "horizontal", depth, horizontal.spacingMm) +

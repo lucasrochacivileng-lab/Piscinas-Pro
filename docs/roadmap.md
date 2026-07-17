@@ -88,7 +88,7 @@ Os desenhos sao documentos de pre-dimensionamento academico. Detalhes de ancorag
 
 ## Fase 6 - Modulacao
 
-Status: integrada ao produto em 16/07/2026 na versao `0.8.0`.
+Status: biblioteca de fabricantes e triagem normativa integrada em 16/07/2026 na versao `0.9.0`.
 
 - [x] familias de blocos academicas com coordenacao modular e canaleta;
 - [x] fiadas com amarracao em contra-fiada e deslocamento de um modulo;

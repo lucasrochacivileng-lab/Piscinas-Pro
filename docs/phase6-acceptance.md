@@ -1,11 +1,14 @@
 # Aceite da implementacao da Fase 6
 
 Data: 13/07/2026
-Versao: `0.8.0`
+Versão: `0.9.0`
 
 ## Entregue
 
-- familias de blocos academicas com modulo, altura de fiada, largura, junta e canaleta;
+- famílias comerciais JB e BLB rastreadas aos catálogos enviados;
+- família normativa, fabricante, faixa de `fbk`, malha de coordenação e peças complementares;
+- verificação obrigatória de Classe A (`fbk ≥ 8 MPa`) para aplicação enterrada;
+- meia canaleta real nas fiadas de cinta e peças L/T quando declaradas pelo fabricante;
 - validacao de familia que exige bloco inteiro e meio bloco e recusa pecas fora do modulo;
 - distribuicao de fiadas por amarracao em contra-fiada com deslocamento de um modulo;
 - meio bloco para fechar comprimentos impares e reclassificacao de fiadas em canaleta;
@@ -30,4 +33,4 @@ Versao: `0.8.0`
 
 ## Gate profissional
 
-A conclusao da implementacao nao autoriza uso em obra. A modulacao usa o metodo de eixo e permanece um pre-dimensionamento academico. Amarracao detalhada, ancoragem e emenda de armaduras, cantos especiais, juntas, aberturas, impermeabilizacao e compatibilizacao executiva continuam bloqueados ate revisao de engenheiro habilitado e fontes normativas licenciadas.
+A conclusão da implementação não autoriza uso em obra. O catálogo comprova apenas a oferta dimensional e a faixa comercial declarada; certificado, identificação e ensaios de aceitação do lote continuam obrigatórios. Resistência de prisma, argamassa, graute, amarração, ancoragens, impermeabilização e compatibilização executiva permanecem sob revisão do engenheiro responsável.

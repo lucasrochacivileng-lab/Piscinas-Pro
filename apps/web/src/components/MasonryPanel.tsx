@@ -16,7 +16,7 @@ function CourseStrip({ course, label }: { course: CourseLayout; label: string })
       {course.placements.map((placement, index) => <span
         className={`block-unit block-${placement.role}`}
         style={{ flexGrow: placement.nominalLengthMm }}
-        title={`${placement.role === "half" ? "Meio bloco" : placement.role === "channel" ? "Canaleta" : "Bloco inteiro"} · ${placement.nominalLengthMm} mm`}
+        title={`${placement.label} · módulo ocupado ${placement.nominalLengthMm} mm`}
         key={`${placement.startModule}:${index}`}
       >{placement.role === "channel" ? "U" : placement.role === "half" ? "½" : ""}</span>)}
     </div>
@@ -49,7 +49,8 @@ export function MasonryPanel({ masonry }: { masonry: Phase1MasonryResult }) {
   return <section className="masonry-panel">
     <div className="section-title"><div><p className="eyebrow">Alvenaria estrutural</p><h2>Modulação dos blocos</h2></div><StatusBadge status={masonry.checks.some((check) => check.status === "REQUIRES_REVIEW") ? "REQUIRES_REVIEW" : "PASS"} /></div>
     <div className="family-summary">
-      <div><small>Família selecionada</small><strong>{family.label}</strong><span>{family.units.map((unit) => unit.label).join(" · ")}</span></div>
+      <div><small>Família selecionada</small><strong>{family.label}</strong><span>{family.normativeFamily} · {family.catalogDocument}</span></div>
+      <div><small>Triagem para uso enterrado</small><strong>Classe {masonry.blockClass} · fbk {format(masonry.blockStrengthMPa, 1)} MPa</strong><span>critério conservador 2016 · revisar NBR 6136-1:2026</span></div>
       <div><small>Total do perímetro</small><strong>{modulation.totalBlocks} blocos</strong><span>{modulation.totalChannelBlocks} canaletas · {modulation.totalVerticalGroutedCells} células grauteadas</span></div>
       <div><small>Cintas com canaleta</small><strong>{modulation.grout.channelCourseIndices.map((index) => `F${index + 1}`).join(" · ")}</strong><span>base, topo e espaçamento configurado</span></div>
     </div>
@@ -57,6 +58,6 @@ export function MasonryPanel({ masonry }: { masonry: Phase1MasonryResult }) {
     <div className="wall-modulation-grid"><WallCard title="Parede longa" wall={modulation.longWall} /><WallCard title="Parede curta" wall={modulation.shortWall} /></div>
     <div className="junction-summary"><strong>Encontros e graute</strong><p>{modulation.junction.notes.join(" ")}</p><p>{modulation.grout.notes.join(" ")}</p></div>
     <div className="checks-list">{masonry.checks.map((check) => <div className="check-row" key={check.id}><StatusBadge status={check.status} /><span>{check.message}</span></div>)}</div>
-    {family.status === "draft" && <div className="warning-box"><strong>Dados do fabricante pendentes</strong><p>Antes do uso executivo, cadastre e valide fbk do bloco, resistência de prisma, argamassa, graute e certificados da família escolhida.</p></div>}
+    {family.status !== "reviewed" && <div className="warning-box"><strong>Validação do lote obrigatória</strong><p>O catálogo define geometria e faixa comercial, mas não substitui certificado e ensaios do lote. Confirme fbk, classe, dimensões, absorção, resistência de prisma, argamassa e graute antes do uso executivo.</p></div>}
   </section>;
 }

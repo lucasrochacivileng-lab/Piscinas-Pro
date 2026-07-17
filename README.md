@@ -2,7 +2,7 @@
 
 POOLSTRUCT e uma base de software para pre-dimensionamento e verificacao rastreavel de piscinas com paredes em alvenaria estrutural e laje de fundo em concreto armado. O objetivo e transformar entradas geometricas, materiais e perfis tecnicos versionados em memorias de calculo auditaveis.
 
-> Estado: Fase 6 integrada ao produto na versao `0.8.0`. O usuario escolhe a familia de blocos, e o calculo retorna fiadas, blocos inteiros, meios blocos, canaletas, encontros, celulas grauteadas e ajustes de modulacao na interface, memoria e prancha. Familias academicas continuam bloqueadas para uso executivo ate validacao de fabricante e engenheiro independente.
+> Estado: biblioteca técnica integrada na versão `0.9.0`. O usuário escolhe fabricante, família normativa e `fbk`; o cálculo retorna fiadas, peças reais, canaletas, encontros, células grauteadas e verificações específicas para piscinas enterradas. Catálogo não substitui certificado e ensaios do lote.
 
 ## Requisitos
 
@@ -109,9 +109,13 @@ Em producao, defina apenas `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`
 
 Consulte `docs/drawings.md` para convencoes, rastreabilidade e limites do desenho.
 
-## Modulacao da Fase 6
+## Modulação e biblioteca técnica da Fase 6
 
-- familias de blocos academicas com modulo, altura de fiada, largura e canaleta;
+- famílias comerciais JB e BLB, além das famílias acadêmicas legadas;
+- fabricante, família dimensional da ABNT NBR 6136, faixa comercial de `fbk` e documento de origem;
+- blocos inteiros, meios blocos, canaletas, meias canaletas, compensadores e peças L/T quando declaradas;
+- reprovação conservadora de Classe B ou C para piscina enterrada segundo a edição 2016 fornecida;
+- bloqueio `REQUIRES_REVIEW` até compatibilização integral com a série ABNT NBR 6136-1:2026 vigente;
 - fiadas com amarracao em contra-fiada e deslocamento de um modulo entre elas;
 - meio bloco para fechar comprimentos impares e canaleta para cinta e verga;
 - encontros de canto em L com alternancia da parede passante por fiada;
@@ -119,7 +123,7 @@ Consulte `docs/drawings.md` para convencoes, rastreabilidade e limites do desenh
 - sugestoes de ajuste (reduzir, ampliar, compensar ou afinar juntas) quando a parede nao fecha no modulo;
 - `modulatePoolPerimeter` retorna paredes, encontros, graute, verificacoes e memoria rastreavel.
 
-A modulacao usa o metodo de eixo e permanece um pre-dimensionamento academico. Consulte `docs/calculation-engine.md` para as convencoes e limites.
+A modulação usa o método de eixo e permanece um pré-dimensionamento. Consulte `docs/block-library-sources.md` para a rastreabilidade dos catálogos e critérios normativos.
 
 ## Capacidades da Fase 1
 

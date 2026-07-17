@@ -54,15 +54,18 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
       <label className="select-field"><span>Família de blocos</span><select value={masonry.blockFamilyId} onChange={(event) => setMasonry("blockFamilyId", event.currentTarget.value)}>
         {DEFAULT_BLOCK_FAMILIES.map((family) => <option value={family.id} key={family.id}>{family.label}</option>)}
       </select></label>
+      <NumberField label="fbk especificado" value={masonry.blockStrengthMPa} unit="MPa" step={1} min={3} onChange={(value) => setMasonry("blockStrengthMPa", value)} />
       <NumberField label="Graute vertical" value={masonry.verticalGroutSpacingMm} unit="mm" step={50} min={100} onChange={(value) => setMasonry("verticalGroutSpacingMm", value)} />
       <NumberField label="Cinta intermediária" value={masonry.bondBeamCourseSpacing} unit="fiadas" min={0} onChange={(value) => setMasonry("bondBeamCourseSpacing", value)} />
     </div>
     <div className="block-family-preview">{DEFAULT_BLOCK_FAMILIES.filter((family) => family.id === masonry.blockFamilyId).map((family) => <div key={family.id}>
       <strong>{family.label}</strong>
-      <span>largura {family.nominalWidthMm} mm · fiada {family.courseHeightMm} mm · junta {family.jointThicknessMm} mm</span>
+      <span>{family.manufacturer} · família normativa {family.normativeFamily} · largura {family.nominalWidthMm} mm</span>
+      <span>fiada {family.courseHeightMm} mm · junta {family.jointThicknessMm} mm · malha básica {family.coordinationGridMm} mm</span>
       <span>{family.units.map((unit) => unit.label).join(" · ")}</span>
       {Math.abs(geometry.wallThicknessMm - family.nominalWidthMm) > 1 && <small>Espessura incompatível: ajuste a parede para {family.nominalWidthMm} mm ou escolha outra família.</small>}
-      <small>Família acadêmica: os dados resistentes do fabricante ainda precisam ser confirmados.</small>
+      {family.status === "catalog" && <small>Catálogo: {family.catalogDocument} · faixa declarada {family.catalogStrengthRangeMPa[0]}–{family.catalogStrengthRangeMPa[1]} MPa. Critério conservador da edição 2016 fornecida: Classe A, fbk ≥ 8 MPa. Revisar pela NBR 6136-1:2026 vigente.</small>}
+      {family.status === "draft" && <small>Família acadêmica: os dados resistentes do fabricante ainda precisam ser confirmados.</small>}
     </div>)}</div>
     </fieldset>
     <fieldset><legend>Solo e carregamentos</legend><div className="form-grid">

@@ -24,7 +24,8 @@ export const DEFAULT_DESIGN_INPUT: Phase1DesignInput = {
   slabBarDiameterMm: 10,
   minimumSlabSteelRatio: 0.0015,
   masonry: {
-    blockFamilyId: "academic-block-family-m20",
+    blockFamilyId: "jb-blocks-20x40",
+    blockStrengthMPa: 8,
     verticalGroutSpacingMm: 200,
     bondBeamCourseSpacing: 4
   }

@@ -65,17 +65,19 @@ O dimensionamento usa secao retangular de largura unitaria. A relacao `KZ = 1 - 
 
 O modulo `modulation.ts` distribui a alvenaria em blocos e serve para pre-dimensionamento academico. As entradas sao nominais em milimetros (bloco real + junta).
 
-### Familias de blocos
+### Famílias de blocos
 
-Uma `BlockFamily` define o modulo de coordenacao (meio bloco nominal), a altura da fiada, a largura nominal, a junta e as pecas. Exige um bloco inteiro (`full`, dois modulos), um meio bloco (`half`, um modulo) e admite canaleta (`channel`) para cinta e verga. `validateBlockFamily` rejeita pecas que nao sejam multiplos inteiros do modulo. Sao fornecidas as familias academicas `BLOCK_FAMILY_M20` (modulo 200 mm) e `BLOCK_FAMILY_M15` (modulo 150 mm).
+Uma `BlockFamily` define fabricante, família dimensional da ABNT NBR 6136, módulo de amarração, malha básica de coordenação, altura de fiada, largura nominal, junta, faixa de resistência e peças. Exige inteiro, meio, canaleta inteira e meia canaleta. Compensadores, amarrações L/T, blocos J e especiais são preservados quando declarados no catálogo.
+
+A biblioteca inclui famílias JB e BLB extraídas dos catálogos enviados e mantém `BLOCK_FAMILY_M20` e `BLOCK_FAMILY_M15` apenas para compatibilidade com revisões acadêmicas antigas. Como triagem conservadora da edição 2016 fornecida, `runPhase1Design` reprova qualquer seleção abaixo da Classe A (`fbk < 8 MPa`). A edição 2016 foi cancelada em 27/02/2026; por isso a compatibilização com a série ABNT NBR 6136-1:2026 permanece `REQUIRES_REVIEW`. A faixa de catálogo é verificada separadamente da aceitação do lote.
 
 ### Fiadas e amarracao
 
-`layoutCourse` preenche uma fiada por amarracao em contra-fiada: a fiada base comeca com bloco inteiro e a contra-fiada comeca com meio bloco, deslocando as juntas verticais em um modulo. Comprimentos impares fecham com meio bloco. `modulateWall` monta a parede por numero de fiadas, contabiliza inteiros, meios e canaletas e conta as cores de graute vertical pelo espacamento informado.
+`layoutCourse` preenche uma fiada por amarração em contra-fiada: a fiada base começa com bloco inteiro e a contra-fiada começa com meio bloco, deslocando as juntas verticais em um módulo. Comprimentos ímpares fecham com meio bloco. Nas cintas, o algoritmo seleciona a canaleta de comprimento correspondente, inclusive meia canaleta, em vez de apenas renomear o bloco comum.
 
 ### Encontros
 
-`modulatePoolPerimeter` resolve os quatro cantos de uma piscina retangular como encontros em L, alternando qual parede passa pelo canto entre a fiada e a contra-fiada. Os comprimentos de assentamento sao tomados pelo eixo das paredes (`L_interno + t`), de modo que os cantos sejam contados uma unica vez. A verificacao `junction-thickness-modular` sinaliza quando a espessura de parede nao coincide com o modulo.
+`modulatePoolPerimeter` resolve os quatro cantos de uma piscina retangular como encontros em L, alternando qual parede passa pelo canto entre a fiada e a contra-fiada. Quando o catálogo declara bloco L ou T, a peça é identificada no plano de encontro; quando não declara, a saída exige o detalhamento pela alternância de fiadas. Os comprimentos de assentamento são tomados pelo eixo das paredes (`L_interno + t`).
 
 ### Graute
 
