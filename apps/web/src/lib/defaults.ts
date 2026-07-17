@@ -1,7 +1,11 @@
-import type { IntegratedDesignInput } from "@poolstruct/calculation-engine";
+import {
+  createEmptyCadGeometryDocument,
+  type IntegratedDesignInput
+} from "@poolstruct/calculation-engine";
 
 export const DEFAULT_DESIGN_INPUT: IntegratedDesignInput = {
   structuralProfileId: "brazil-2026-normative-review",
+  cadGeometry: createEmptyCadGeometryDocument(),
   geometry: {
     internalLengthMm: 8000,
     internalWidthMm: 4000,

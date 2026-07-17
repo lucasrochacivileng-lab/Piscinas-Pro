@@ -1,9 +1,10 @@
-import type {
-  IntegratedDesignInput,
-  IntegratedDesignResult,
-  Phase1DesignResult,
-  PoolDepthZoneInput,
-  SptLayerInput
+import {
+  createEmptyCadGeometryDocument,
+  type IntegratedDesignInput,
+  type IntegratedDesignResult,
+  type Phase1DesignResult,
+  type PoolDepthZoneInput,
+  type SptLayerInput
 } from "@poolstruct/calculation-engine";
 import { DEFAULT_DESIGN_INPUT } from "./defaults";
 
@@ -99,6 +100,7 @@ export function normalizeIntegratedDesignInput(value: unknown): IntegratedDesign
     structuralProfileId: typeof candidate.structuralProfileId === "string" && candidate.structuralProfileId.trim() !== ""
       ? candidate.structuralProfileId
       : DEFAULT_DESIGN_INPUT.structuralProfileId,
+    cadGeometry: candidate.cadGeometry ?? createEmptyCadGeometryDocument(),
     geometry: {
       ...DEFAULT_DESIGN_INPUT.geometry,
       ...geometryCandidate,

@@ -15,6 +15,7 @@ import { useEffect, useState, type FormEvent } from "react";
 interface Props {
   initialInput: IntegratedDesignInput;
   busy: boolean;
+  onInputChange?(input: IntegratedDesignInput): void;
   onCalculate(input: IntegratedDesignInput): Promise<void>;
 }
 
@@ -59,9 +60,10 @@ const legacyZone = (input: IntegratedDesignInput): PoolDepthZoneInput => ({
   floorProfile: "HORIZONTAL", startWaterDepthMm: input.geometry.waterDepthMm, endWaterDepthMm: input.geometry.waterDepthMm
 });
 
-export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
+export function CalculationEditor({ initialInput, busy, onInputChange, onCalculate }: Props) {
   const [input, setInput] = useState(initialInput);
   useEffect(() => setInput(initialInput), [initialInput]);
+  useEffect(() => onInputChange?.(input), [input, onInputChange]);
   const geometry = input.geometry;
   const zones = (geometry.depthZones && geometry.depthZones.length > 0 ? geometry.depthZones : [legacyZone(input)]).map(normalizeZone);
   const masonry = input.masonry ?? DEFAULT_MASONRY_SPECIFICATION;
@@ -153,7 +155,7 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
     if (next.length === 1 && next[0]) next[0] = normalizeZone({ ...next[0], kind: "MAIN", label: "Fundo principal" });
     setDepthZones(next);
   };
-  const setValue = (field: Exclude<keyof IntegratedDesignInput, "geometry" | "masonry" | "geotechnical" | "masonryMaterials" | "structuralProfileId">, value: number) => setInput((current) => ({ ...current, [field]: value }));
+  const setValue = (field: Exclude<keyof IntegratedDesignInput, "geometry" | "masonry" | "geotechnical" | "masonryMaterials" | "structuralProfileId" | "cadGeometry">, value: number) => setInput((current) => ({ ...current, [field]: value }));
   const setMasonry = (field: keyof typeof masonry, value: string | number) => setInput((current) => ({ ...current, masonry: { ...(current.masonry ?? DEFAULT_MASONRY_SPECIFICATION), [field]: value } }));
   const setBlockClass = (nextClass: ConcreteBlockClass) => setInput((current) => {
     const currentMasonry = current.masonry ?? DEFAULT_MASONRY_SPECIFICATION;
