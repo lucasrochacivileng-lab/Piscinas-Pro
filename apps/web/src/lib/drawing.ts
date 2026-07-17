@@ -114,13 +114,13 @@ function sectionView(input: Phase1DesignInput, result: Phase1DesignResult): stri
     const floorY = top + zone.waterDepthMm * verticalScale;
     const waterHeight = Math.max(1, floorY - top);
     const slabZone = result.slabZones?.[index];
-    const zone = rect(cursor, top, zoneWidth, waterHeight, "water") +
+    const zoneDrawing = rect(cursor, top, zoneWidth, waterHeight, "water") +
       rect(cursor, floorY, zoneWidth, slabDraw, "hatch") +
-      text(cursor + zoneWidth / 2, floorY - 3, `${zones[index]?.label ?? `Z${index + 1}`} · ${metres(zones[index]?.waterDepthMm ?? 0)} m`, "zone-section-label", "middle") +
+      text(cursor + zoneWidth / 2, floorY - 3, `${zone.label} · ${metres(zone.waterDepthMm)} m`, "zone-section-label", "middle") +
       (slabZone ? text(cursor + zoneWidth / 2, floorY + slabDraw / 2 + 1, bar(slabZone.design.bottomX.layout.diameterMm, slabZone.design.bottomX.layout.spacingMm), "tiny", "middle") : "");
-    const step = index > 0 ? rect(cursor - 1.1, Math.min(top + (zones[index - 1]?.waterDepthMm ?? 0) * verticalScale, floorY), 2.2, Math.abs((zones[index - 1]?.waterDepthMm ?? 0) - (zones[index]?.waterDepthMm ?? 0)) * verticalScale + slabDraw, "step-wall") : "";
+    const step = index > 0 ? rect(cursor - 1.1, Math.min(top + (zones[index - 1]?.waterDepthMm ?? 0) * verticalScale, floorY), 2.2, Math.abs((zones[index - 1]?.waterDepthMm ?? 0) - zone.waterDepthMm) * verticalScale + slabDraw, "step-wall") : "";
     cursor += zoneWidth;
-    return step + zone;
+    return step + zoneDrawing;
   }).join("");
   return `<g id="corte-a-a" data-view="section">${text(14, 141, "CORTE LONGITUDINAL A—A", "view-title")}` +
     text(14, 146, "Perfil escalonado · prainha, fundos e paredes de degrau", "note") +
@@ -132,7 +132,10 @@ function sectionView(input: Phase1DesignInput, result: Phase1DesignResult): stri
 }
 
 function wallElevation(input: Phase1DesignInput, result: Phase1DesignResult): string {
-  const wall = result.wallPanels?.reduce((current, candidate) => candidate.heightMm > current.heightMm ? candidate : current, result.wallPanels[0]) ?? null;
+  const panels = result.wallPanels ?? [];
+  const wall = panels.length > 0
+    ? panels.reduce((current, candidate) => candidate.heightMm > current.heightMm ? candidate : current)
+    : null;
   const length = wall?.lengthMm ?? input.geometry.internalLengthMm + 2 * input.geometry.wallThicknessMm;
   const depth = wall?.heightMm ?? input.geometry.waterDepthMm;
   const horizontal = wall?.design.parallel.layout ?? result.longWall.design.parallel.layout;
