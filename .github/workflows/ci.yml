@@ -27,17 +27,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run release:validate
       - run: npm test
-      - name: TypeScript check
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run check 2>&1 | tee typecheck-output.log
-      - uses: actions/upload-artifact@v5
-        if: ${{ !cancelled() }}
-        with:
-          name: cad-typecheck-output
-          path: typecheck-output.log
-          retention-days: 2
+      - run: npm run check
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
