@@ -70,6 +70,7 @@ export interface PoolGeometryModel {
 }
 
 const MAX_SLOPED_WALL_SEGMENT_MM = 1_000;
+const MIN_STRUCTURAL_WALL_HEIGHT_MM = 100;
 
 const legacyZone = (geometry: PoolGeometryInput): PoolDepthZoneInput => ({
   id: "main",
@@ -211,26 +212,30 @@ export function buildPoolGeometryModel(geometry: PoolGeometryInput): PoolGeometr
   const lastZone = zones.at(-1);
   if (firstZone && lastZone) {
     const endWallLengthMm = geometry.internalWidthMm + 2 * geometry.wallThicknessMm;
-    wallPanels.push({
-      id: "west-end",
-      label: `Parede oeste — ${firstZone.label}`,
-      kind: "PERIMETER_END",
-      side: "WEST",
-      zoneId: firstZone.id,
-      lengthMm: endWallLengthMm,
-      heightMm: firstZone.startWaterDepthMm,
-      quantityHeightMm: firstZone.startWaterDepthMm
-    });
-    wallPanels.push({
-      id: "east-end",
-      label: `Parede leste — ${lastZone.label}`,
-      kind: "PERIMETER_END",
-      side: "EAST",
-      zoneId: lastZone.id,
-      lengthMm: endWallLengthMm,
-      heightMm: lastZone.endWaterDepthMm,
-      quantityHeightMm: lastZone.endWaterDepthMm
-    });
+    if (firstZone.startWaterDepthMm >= MIN_STRUCTURAL_WALL_HEIGHT_MM) {
+      wallPanels.push({
+        id: "west-end",
+        label: `Parede oeste — ${firstZone.label}`,
+        kind: "PERIMETER_END",
+        side: "WEST",
+        zoneId: firstZone.id,
+        lengthMm: endWallLengthMm,
+        heightMm: firstZone.startWaterDepthMm,
+        quantityHeightMm: firstZone.startWaterDepthMm
+      });
+    }
+    if (lastZone.endWaterDepthMm >= MIN_STRUCTURAL_WALL_HEIGHT_MM) {
+      wallPanels.push({
+        id: "east-end",
+        label: `Parede leste — ${lastZone.label}`,
+        kind: "PERIMETER_END",
+        side: "EAST",
+        zoneId: lastZone.id,
+        lengthMm: endWallLengthMm,
+        heightMm: lastZone.endWaterDepthMm,
+        quantityHeightMm: lastZone.endWaterDepthMm
+      });
+    }
   }
 
   for (let index = 1; index < zones.length; index += 1) {
