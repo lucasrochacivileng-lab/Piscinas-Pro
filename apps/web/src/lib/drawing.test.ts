@@ -1,10 +1,10 @@
-import { runPhase1Design, SILVA_2022_PHASE1_PROFILE } from "@poolstruct/calculation-engine";
+import { BRAZIL_2026_PRELIMINARY_PROFILE, runIntegratedDesign } from "@poolstruct/calculation-engine";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_DESIGN_INPUT } from "./defaults";
 import { buildTechnicalDrawingSvg, drawingFilename, DRAWING_SHEET } from "./drawing";
 import type { ProjectRecord, RevisionRecord } from "./models";
 
-const result = runPhase1Design(DEFAULT_DESIGN_INPUT, SILVA_2022_PHASE1_PROFILE);
+const result = runIntegratedDesign(DEFAULT_DESIGN_INPUT, BRAZIL_2026_PRELIMINARY_PROFILE);
 const project: ProjectRecord = {
   id: "project", ownerId: "owner", name: "Piscina Águas <Norte>", location: "Rua A & B",
   status: "calculated", createdAt: "2026-07-13T12:00:00.000Z", updatedAt: "2026-07-13T12:00:00.000Z"
