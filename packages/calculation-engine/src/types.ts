@@ -99,7 +99,7 @@ export interface WallPanelResult {
 
 export interface WallPanelError {
   readonly field: keyof WallPanelInput | "profile" | "heightToLengthRatio";
-  readonly code: "NOT_FINITE" | "OUT_OF_RANGE" | "INVALID_PROFILE" | "UNSUPPORTED_RATIO";
+  readonly code: "NOT_FINITE" | "OUT_OF_RANGE" | "INVALID_PROFILE" | "INVALID_GEOMETRY" | "UNSUPPORTED_RATIO";
   readonly message: string;
 }
 
