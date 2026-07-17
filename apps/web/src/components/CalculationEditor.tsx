@@ -7,6 +7,7 @@ import {
   type IntegratedDesignInput,
   type PoolDepthZoneInput,
   type PoolDepthZoneKind,
+  type PoolFloorProfile,
   type SoilMaterial
 } from "@poolstruct/calculation-engine";
 import { useEffect, useState, type FormEvent } from "react";
@@ -28,7 +29,7 @@ interface NumberFieldProps {
 
 const DEFAULT_STRENGTH_BY_CLASS: Readonly<Record<ConcreteBlockClass, number>> = { A: 8, B: 4, C: 3 };
 const ZONE_KIND_LABEL: Readonly<Record<PoolDepthZoneKind, string>> = {
-  SHALLOW: "Prainha / rasa", INTERMEDIATE: "Intermediária", MAIN: "Fundo principal"
+  BEACH: "Praia inclinada", SHALLOW: "Prainha / rasa", INTERMEDIATE: "Intermediária", MAIN: "Fundo principal"
 };
 const SOIL_LABEL: Readonly<Record<SoilMaterial, string>> = {
   SAND: "Areia", SILTY_SAND: "Areia siltosa", SANDY_SILT: "Silte arenoso",
@@ -39,39 +40,77 @@ function NumberField({ label, value, unit, step = 1, min = 0, onChange }: Number
   return <label className="number-field"><span>{label}</span><div><input type="number" value={value} min={min} step={step} onChange={(event) => onChange(event.currentTarget.valueAsNumber)} required /><small>{unit}</small></div></label>;
 }
 
+const zoneStartDepth = (zone: PoolDepthZoneInput): number => zone.startWaterDepthMm ?? zone.waterDepthMm;
+const zoneEndDepth = (zone: PoolDepthZoneInput): number => zone.endWaterDepthMm ?? zone.waterDepthMm;
+const normalizeZone = (zone: PoolDepthZoneInput): PoolDepthZoneInput => {
+  const startWaterDepthMm = zoneStartDepth(zone);
+  const endWaterDepthMm = zoneEndDepth(zone);
+  return {
+    ...zone,
+    floorProfile: zone.floorProfile ?? (Math.abs(startWaterDepthMm - endWaterDepthMm) > 1 ? "SLOPED" : "HORIZONTAL"),
+    startWaterDepthMm,
+    endWaterDepthMm,
+    waterDepthMm: Math.max(startWaterDepthMm, endWaterDepthMm)
+  };
+};
 const legacyZone = (input: IntegratedDesignInput): PoolDepthZoneInput => ({
   id: "main", label: "Fundo principal", kind: "MAIN",
-  lengthMm: input.geometry.internalLengthMm, waterDepthMm: input.geometry.waterDepthMm
+  lengthMm: input.geometry.internalLengthMm, waterDepthMm: input.geometry.waterDepthMm,
+  floorProfile: "HORIZONTAL", startWaterDepthMm: input.geometry.waterDepthMm, endWaterDepthMm: input.geometry.waterDepthMm
 });
 
 export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
   const [input, setInput] = useState(initialInput);
   useEffect(() => setInput(initialInput), [initialInput]);
   const geometry = input.geometry;
-  const zones = geometry.depthZones && geometry.depthZones.length > 0 ? geometry.depthZones : [legacyZone(input)];
+  const zones = (geometry.depthZones && geometry.depthZones.length > 0 ? geometry.depthZones : [legacyZone(input)]).map(normalizeZone);
   const masonry = input.masonry ?? DEFAULT_MASONRY_SPECIFICATION;
   const blockClass = masonry.blockClass ?? "A";
   const strengthRule = validateConcreteBlockStrength(blockClass, masonry.blockStrengthMPa).rule;
 
   const setGeometry = (field: Exclude<keyof IntegratedDesignInput["geometry"], "depthZones" | "waterDepthMm">, value: number) => setInput((current) => {
     if (field !== "internalLengthMm") return { ...current, geometry: { ...current.geometry, [field]: value } };
-    const currentZones = current.geometry.depthZones && current.geometry.depthZones.length > 0 ? [...current.geometry.depthZones] : [legacyZone(current)];
+    const currentZones = current.geometry.depthZones && current.geometry.depthZones.length > 0 ? current.geometry.depthZones.map(normalizeZone) : [legacyZone(current)];
     const lastIndex = currentZones.length - 1;
     const delta = value - current.geometry.internalLengthMm;
-    const last = currentZones[lastIndex];
-    if (last) currentZones[lastIndex] = { ...last, lengthMm: Math.max(100, last.lengthMm + delta) };
-    return { ...current, geometry: { ...current.geometry, internalLengthMm: currentZones.reduce((sum, zone) => sum + zone.lengthMm, 0), depthZones: currentZones } };
+    const nextZones = [...currentZones];
+    const last = nextZones[lastIndex];
+    if (last) nextZones[lastIndex] = { ...last, lengthMm: Math.max(100, last.lengthMm + delta) };
+    return { ...current, geometry: { ...current.geometry, internalLengthMm: nextZones.reduce((sum, zone) => sum + zone.lengthMm, 0), depthZones: nextZones } };
   });
-  const setDepthZones = (nextZones: readonly PoolDepthZoneInput[]) => setInput((current) => ({
-    ...current,
-    geometry: {
-      ...current.geometry,
-      internalLengthMm: nextZones.reduce((sum, zone) => sum + zone.lengthMm, 0),
-      waterDepthMm: Math.max(...nextZones.map((zone) => zone.waterDepthMm)),
-      depthZones: nextZones
+  const setDepthZones = (nextZones: readonly PoolDepthZoneInput[]) => setInput((current) => {
+    const normalized = nextZones.map(normalizeZone);
+    return {
+      ...current,
+      geometry: {
+        ...current.geometry,
+        internalLengthMm: normalized.reduce((sum, zone) => sum + zone.lengthMm, 0),
+        waterDepthMm: Math.max(...normalized.map((zone) => zone.waterDepthMm)),
+        depthZones: normalized
+      }
+    };
+  });
+  const updateZone = (index: number, patch: Partial<PoolDepthZoneInput>) => {
+    const current = normalizeZone(zones[index]!);
+    let next = normalizeZone({ ...current, ...patch });
+    if (patch.floorProfile === "HORIZONTAL") {
+      const depth = Math.max(zoneStartDepth(current), zoneEndDepth(current));
+      next = normalizeZone({ ...next, floorProfile: "HORIZONTAL", startWaterDepthMm: depth, endWaterDepthMm: depth, waterDepthMm: depth });
     }
-  }));
-  const updateZone = (index: number, patch: Partial<PoolDepthZoneInput>) => setDepthZones(zones.map((zone, zoneIndex) => zoneIndex === index ? { ...zone, ...patch } : zone));
+    if (patch.floorProfile === "SLOPED" && Math.abs(zoneStartDepth(current) - zoneEndDepth(current)) <= 1) {
+      next = normalizeZone({ ...next, floorProfile: "SLOPED", kind: current.kind === "MAIN" ? "BEACH" : current.kind, startWaterDepthMm: 0, endWaterDepthMm: Math.max(400, current.waterDepthMm) });
+    }
+    setDepthZones(zones.map((zone, zoneIndex) => zoneIndex === index ? next : zone));
+  };
+  const updateHorizontalDepth = (index: number, value: number) => updateZone(index, {
+    floorProfile: "HORIZONTAL", startWaterDepthMm: value, endWaterDepthMm: value, waterDepthMm: value
+  });
+  const updateSlopedDepth = (index: number, endpoint: "startWaterDepthMm" | "endWaterDepthMm", value: number) => {
+    const zone = normalizeZone(zones[index]!);
+    const start = endpoint === "startWaterDepthMm" ? value : zone.startWaterDepthMm!;
+    const end = endpoint === "endWaterDepthMm" ? value : zone.endWaterDepthMm!;
+    updateZone(index, { floorProfile: "SLOPED", [endpoint]: value, waterDepthMm: Math.max(start, end) });
+  };
   const addZone = () => {
     const current = [...zones];
     const sourceIndex = current.length - 1;
@@ -79,11 +118,27 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
     if (!source || source.lengthMm < 400) return;
     const insertedLength = Math.max(200, Math.floor(source.lengthMm / 3 / 100) * 100);
     current[sourceIndex] = { ...source, kind: "MAIN", label: source.kind === "MAIN" ? source.label : "Fundo principal", lengthMm: source.lengthMm - insertedLength };
-    current.splice(sourceIndex, 0, {
+    current.splice(sourceIndex, 0, normalizeZone({
       id: `zone-${Date.now()}`, label: current.length === 1 ? "Prainha" : `Trecho ${current.length}`,
       kind: current.length === 1 ? "SHALLOW" : "INTERMEDIATE", lengthMm: insertedLength,
-      waterDepthMm: current.length === 1 ? Math.min(400, source.waterDepthMm) : source.waterDepthMm
-    });
+      waterDepthMm: current.length === 1 ? Math.min(400, source.waterDepthMm) : source.waterDepthMm,
+      floorProfile: "HORIZONTAL",
+      startWaterDepthMm: current.length === 1 ? Math.min(400, source.waterDepthMm) : source.waterDepthMm,
+      endWaterDepthMm: current.length === 1 ? Math.min(400, source.waterDepthMm) : source.waterDepthMm
+    }));
+    setDepthZones(current);
+  };
+  const addBeach = () => {
+    const current = [...zones];
+    const source = current[0];
+    if (!source || source.lengthMm < 800) return;
+    const beachLength = Math.max(500, Math.floor(source.lengthMm / 3 / 100) * 100);
+    current[0] = { ...source, lengthMm: source.lengthMm - beachLength };
+    current.unshift(normalizeZone({
+      id: `beach-${Date.now()}`, label: "Praia", kind: "BEACH", lengthMm: beachLength,
+      waterDepthMm: Math.min(600, source.waterDepthMm), floorProfile: "SLOPED",
+      startWaterDepthMm: 0, endWaterDepthMm: Math.min(600, source.waterDepthMm)
+    }));
     setDepthZones(current);
   };
   const removeZone = (index: number) => {
@@ -95,7 +150,7 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
     const targetIndex = index === 0 ? 0 : index - 1;
     const target = next[targetIndex];
     if (target) next[targetIndex] = { ...target, lengthMm: target.lengthMm + removed.lengthMm };
-    if (next.length === 1 && next[0]) next[0] = { ...next[0], kind: "MAIN", label: "Fundo principal" };
+    if (next.length === 1 && next[0]) next[0] = normalizeZone({ ...next[0], kind: "MAIN", label: "Fundo principal" });
     setDepthZones(next);
   };
   const setValue = (field: Exclude<keyof IntegratedDesignInput, "geometry" | "masonry" | "geotechnical" | "masonryMaterials" | "structuralProfileId">, value: number) => setInput((current) => ({ ...current, [field]: value }));
@@ -135,13 +190,25 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
       <NumberField label="Espessura da parede" value={geometry.wallThicknessMm} unit="mm" onChange={(value) => setGeometry("wallThicknessMm", value)} />
       <NumberField label="Espessura da laje" value={geometry.slabThicknessMm} unit="mm" onChange={(value) => setGeometry("slabThicknessMm", value)} />
     </div>
-    <div className="depth-zones-editor"><div className="section-title"><div><p className="eyebrow">Perfil longitudinal</p><h3>Zonas de profundidade</h3></div><button type="button" className="secondary" onClick={addZone}>Adicionar zona</button></div>
-      {zones.map((zone, index) => <article className="depth-zone-card" key={zone.id}><header><strong>Z{index + 1}</strong><span>{ZONE_KIND_LABEL[zone.kind]}</span>{zones.length > 1 && <button type="button" className="text-button" onClick={() => removeZone(index)}>Remover</button>}</header><div className="form-grid">
-        <label className="select-field"><span>Tipo</span><select value={zone.kind} onChange={(event) => updateZone(index, { kind: event.currentTarget.value as PoolDepthZoneKind })}><option value="SHALLOW">Prainha / rasa</option><option value="INTERMEDIATE">Intermediária</option><option value="MAIN">Fundo principal</option></select></label>
-        <label className="number-field"><span>Nome</span><div><input type="text" value={zone.label} onChange={(event) => updateZone(index, { label: event.currentTarget.value })} required /></div></label>
-        <NumberField label="Comprimento" value={zone.lengthMm} unit="mm" min={100} onChange={(value) => updateZone(index, { lengthMm: value })} />
-        <NumberField label="Profundidade d'água" value={zone.waterDepthMm} unit="mm" min={100} onChange={(value) => updateZone(index, { waterDepthMm: value })} />
-      </div></article>)}
+    <div className="depth-zones-editor"><div className="section-title"><div><p className="eyebrow">Perfil longitudinal</p><h3>Zonas de profundidade</h3></div><div><button type="button" className="secondary" onClick={addBeach}>Adicionar praia</button> <button type="button" className="secondary" onClick={addZone}>Adicionar zona</button></div></div>
+      {zones.map((zone, index) => {
+        const floorProfile = (zone.floorProfile ?? "HORIZONTAL") as PoolFloorProfile;
+        const startDepth = zoneStartDepth(zone);
+        const endDepth = zoneEndDepth(zone);
+        const slopePercent = zone.lengthMm > 0 ? Math.abs(endDepth - startDepth) / zone.lengthMm * 100 : 0;
+        const floorLength = Math.hypot(zone.lengthMm, endDepth - startDepth);
+        return <article className="depth-zone-card" key={zone.id}><header><strong>Z{index + 1}</strong><span>{ZONE_KIND_LABEL[zone.kind]}</span>{zones.length > 1 && <button type="button" className="text-button" onClick={() => removeZone(index)}>Remover</button>}</header><div className="form-grid">
+          <label className="select-field"><span>Tipo</span><select value={zone.kind} onChange={(event) => updateZone(index, { kind: event.currentTarget.value as PoolDepthZoneKind })}><option value="BEACH">Praia inclinada</option><option value="SHALLOW">Prainha / rasa</option><option value="INTERMEDIATE">Intermediária</option><option value="MAIN">Fundo principal</option></select></label>
+          <label className="select-field"><span>Perfil do piso</span><select value={floorProfile} onChange={(event) => updateZone(index, { floorProfile: event.currentTarget.value as PoolFloorProfile })}><option value="HORIZONTAL">Horizontal</option><option value="SLOPED">Inclinado</option></select></label>
+          <label className="number-field"><span>Nome</span><div><input type="text" value={zone.label} onChange={(event) => updateZone(index, { label: event.currentTarget.value })} required /></div></label>
+          <NumberField label="Comprimento horizontal" value={zone.lengthMm} unit="mm" min={100} onChange={(value) => updateZone(index, { lengthMm: value })} />
+          {floorProfile === "HORIZONTAL" ? <NumberField label="Profundidade d'água" value={startDepth} unit="mm" min={0} onChange={(value) => updateHorizontalDepth(index, value)} /> : <>
+            <NumberField label="Profundidade inicial" value={startDepth} unit="mm" min={0} onChange={(value) => updateSlopedDepth(index, "startWaterDepthMm", value)} />
+            <NumberField label="Profundidade final" value={endDepth} unit="mm" min={0} onChange={(value) => updateSlopedDepth(index, "endWaterDepthMm", value)} />
+            <label className="number-field"><span>Inclinação / comprimento real</span><div><input value={`${slopePercent.toFixed(2)}% · ${floorLength.toFixed(0)} mm`} readOnly /></div></label>
+          </>}
+        </div></article>;
+      })}
     </div></fieldset>
 
     <fieldset><legend>Perfil SPT e flutuação</legend><div className="form-grid">
