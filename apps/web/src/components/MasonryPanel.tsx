@@ -50,7 +50,7 @@ export function MasonryPanel({ masonry }: { masonry: Phase1MasonryResult }) {
     <div className="section-title"><div><p className="eyebrow">Alvenaria estrutural</p><h2>Modulação dos blocos</h2></div><StatusBadge status={masonry.checks.some((check) => check.status === "REQUIRES_REVIEW") ? "REQUIRES_REVIEW" : "PASS"} /></div>
     <div className="family-summary">
       <div><small>Família selecionada</small><strong>{family.label}</strong><span>{family.normativeFamily} · {family.catalogDocument}</span></div>
-      <div><small>Triagem para uso enterrado</small><strong>Classe {masonry.blockClass} · fbk {format(masonry.blockStrengthMPa, 1)} MPa</strong><span>critério conservador 2016 · revisar NBR 6136-1:2026</span></div>
+      <div><small>Classificação para uso enterrado</small><strong>Classe {masonry.blockClass} · fbk {format(masonry.blockStrengthMPa, 1)} MPa</strong><span>ABNT NBR 6136-1:2026 · abaixo do solo somente Classe A</span></div>
       <div><small>Total do perímetro</small><strong>{modulation.totalBlocks} blocos</strong><span>{modulation.totalChannelBlocks} canaletas · {modulation.totalVerticalGroutedCells} células grauteadas</span></div>
       <div><small>Cintas com canaleta</small><strong>{modulation.grout.channelCourseIndices.map((index) => `F${index + 1}`).join(" · ")}</strong><span>base, topo e espaçamento configurado</span></div>
     </div>

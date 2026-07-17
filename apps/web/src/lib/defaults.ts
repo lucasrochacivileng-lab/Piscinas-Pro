@@ -11,9 +11,11 @@ export const DEFAULT_DESIGN_INPUT: Phase1DesignInput = {
   saturatedSoilUnitWeightKNM3: 20,
   soilFrictionAngleDegrees: 30,
   groundwaterHeadAboveSlabBottomMm: 0,
-  imposedFloorLoadKPa: 0,
+  // Valor acadêmico adotado por Silva (2022): 250 kgf/m² ≈ 2,5 kPa.
+  imposedFloorLoadKPa: 2.5,
   masonryUnitWeightKNM3: 14,
-  effectiveWallHeightFactor: 1,
+  // Parede engastada na base e livre no topo: hef = 2h, salvo travamento específico.
+  effectiveWallHeightFactor: 2,
   orthogonalityCoefficient: 0.5,
   reinforcementCoverMm: 30,
   wallBarDiameterMm: 10,
