@@ -1,7 +1,6 @@
-import type { StructuralDesignProfile } from "./engineering.js";
+import type { EngineeringCheck, StructuralDesignProfile } from "./engineering.js";
 import { maximumPoolDepthMm } from "./geometry.js";
 import type { PoolGeometryInput, TraceStep } from "./types.js";
-import type { EngineeringCheck } from "./engineering.js";
 
 export interface GlobalFlotationInput {
   readonly geometry: PoolGeometryInput;
@@ -103,13 +102,13 @@ export function calculateGlobalFlotation(
       },
       {
         id: "global-flotation-factor",
-        description: "Fator de segurança global à flutuação",
+        description: "Fator de segurança global à flutuação; resultado 0 indica ausência de subpressão",
         equation: "FS = R_permanente / U",
         substitutions: {
           R_permanente: totalPermanentResistanceKN,
           U: grossUpliftKN
         },
-        result: safetyFactor ?? Number.POSITIVE_INFINITY,
+        result: safetyFactor ?? 0,
         unit: "ratio"
       }
     ],
