@@ -44,7 +44,7 @@ export interface IntegratedDesignResult extends Omit<Phase1DesignResult, "masonr
   readonly profileSourceKind: "academic" | "normative";
   readonly geotechnical: SoilProfileResult;
   readonly flotation: GlobalFlotationResult;
-  readonly masonry?: IntegratedMasonryResult;
+  readonly masonry: IntegratedMasonryResult;
 }
 
 const wallDemand = (wall: Phase1WallResult): number => Math.max(
@@ -122,6 +122,8 @@ export function runIntegratedDesign(
     ...(input.masonry ? { masonry: input.masonry } : {})
   };
   const base = runPhase1Design(resolvedInput, profile);
+  if (!base.masonry) throw new RangeError("O fluxo integrado exige resultado de alvenaria.");
+
   const masonryInput: IntegratedMasonrySpecificationInput = input.masonry ?? DEFAULT_MASONRY_SPECIFICATION;
   const mortarStrengthMPa = masonryInput.mortarStrengthMPa ?? 4;
   const groutStrengthMPa = masonryInput.groutStrengthMPa ?? 15;
@@ -203,9 +205,9 @@ export function runIntegratedDesign(
     prismStrengthMPa
   };
   const materialChecks = constituentChecks(masonrySystem, profile);
-  const masonryChecks = base.masonry ? [...base.masonry.checks, ...materialChecks] : materialChecks;
+  const masonryChecks = [...base.masonry.checks, ...materialChecks];
   const oldWallCheckIds = new Set(base.wallPanels.flatMap((wall) => wall.checks.map((check) => check.id)));
-  const oldMasonryCheckIds = new Set(base.masonry?.checks.map((check) => check.id) ?? []);
+  const oldMasonryCheckIds = new Set(base.masonry.checks.map((check) => check.id));
   const retainedBaseChecks = base.checks.filter((check) =>
     !oldWallCheckIds.has(check.id) && !oldMasonryCheckIds.has(check.id)
   );
@@ -224,7 +226,7 @@ export function runIntegratedDesign(
       ? "REQUIRES_REVIEW"
       : "PASS";
 
-  const integratedMasonry: IntegratedMasonryResult | null = base.masonry ? {
+  const integratedMasonry: IntegratedMasonryResult = {
     ...base.masonry,
     mortarStrengthMPa,
     groutStrengthMPa,
@@ -235,7 +237,7 @@ export function runIntegratedDesign(
       ...base.masonry.warnings,
       "Argamassa, graute e prisma devem ser vinculados ao plano de controle tecnológico da obra."
     ]
-  } : null;
+  };
 
   return {
     ...base,
@@ -248,7 +250,7 @@ export function runIntegratedDesign(
     longWall,
     shortWall,
     wallPanels,
-    ...(integratedMasonry ? { masonry: integratedMasonry } : {}),
+    masonry: integratedMasonry,
     checks,
     overallStatus,
     warnings: [
