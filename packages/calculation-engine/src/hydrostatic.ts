@@ -27,28 +27,43 @@ export function calculateHydrostaticAction(
   const normalizedZones = normalizePoolDepthZones(geometry);
 
   const zones = normalizedZones.map((zone) => {
-    const zoneDepthM = mmToM(zone.waterDepthMm);
-    const volumeM3 = mmToM(zone.lengthMm) * widthM * zoneDepthM;
+    const startDepthM = mmToM(zone.startWaterDepthMm);
+    const endDepthM = mmToM(zone.endWaterDepthMm);
+    const averageDepthM = mmToM(zone.averageWaterDepthMm);
+    const volumeM3 = mmToM(zone.lengthMm) * widthM * averageDepthM;
+    const startFloorPressureKPa = gammaWater * startDepthM;
+    const endFloorPressureKPa = gammaWater * endDepthM;
+    const averageFloorPressureKPa = gammaWater * averageDepthM;
     return {
       id: zone.id,
       label: zone.label,
       kind: zone.kind,
+      floorProfile: zone.floorProfile,
       lengthMm: zone.lengthMm,
-      waterDepthMm: zone.waterDepthMm,
+      waterDepthMm: zone.maximumWaterDepthMm,
+      startWaterDepthMm: zone.startWaterDepthMm,
+      endWaterDepthMm: zone.endWaterDepthMm,
+      averageWaterDepthMm: zone.averageWaterDepthMm,
+      floorLengthMm: zone.floorLengthMm,
+      slopePercent: zone.slopePercent,
       volumeM3,
-      floorPressureKPa: gammaWater * zoneDepthM
+      floorPressureKPa: Math.max(startFloorPressureKPa, endFloorPressureKPa),
+      startFloorPressureKPa,
+      endFloorPressureKPa,
+      averageFloorPressureKPa
     };
   });
   const waterVolumeM3 = poolWaterVolumeM3(geometry);
   const maximumWallPressureKPa = gammaWater * depthM;
   const wallResultantKNPerM = (gammaWater * depthM ** 2) / 2;
   const wallBaseMomentKNMPerM = (gammaWater * depthM ** 3) / 6;
+  const slopedZones = normalizedZones.filter((zone) => zone.floorProfile === "SLOPED");
 
   const trace: TraceStep[] = [
     {
       id: "water-volume-zones",
-      description: "Volume geométrico de água pela soma das zonas de profundidade",
-      equation: "V = sum(L_i * B * h_i)",
+      description: "Volume geométrico de água pela soma de prismas e cunhas das zonas",
+      equation: "V = sum(L_i * B * (h_i0 + h_i1) / 2)",
       substitutions: {
         B: widthM,
         zones: zones.length
@@ -79,7 +94,19 @@ export function calculateHydrostaticAction(
       substitutions: { gamma_water: gammaWater, h_max: depthM },
       result: wallBaseMomentKNMPerM,
       unit: "kN.m/m"
-    }
+    },
+    ...slopedZones.map((zone): TraceStep => ({
+      id: `sloped-floor-pressure-${zone.id}`,
+      description: `${zone.label}: pressão média equivalente no piso inclinado`,
+      equation: "p_med = gamma_water * (h_inicio + h_fim) / 2",
+      substitutions: {
+        gamma_water: gammaWater,
+        h_inicio: mmToM(zone.startWaterDepthMm),
+        h_fim: mmToM(zone.endWaterDepthMm)
+      },
+      result: gammaWater * mmToM(zone.averageWaterDepthMm),
+      unit: "kPa"
+    }))
   ];
 
   return {
@@ -95,9 +122,11 @@ export function calculateHydrostaticAction(
       zones,
       trace,
       warnings: [
-        zones.length > 1
-          ? "Volume e pressões calculados por zonas; o resumo de parede usa a maior profundidade."
-          : "Resultado limitado ao caso de piscina cheia e a acao da agua.",
+        slopedZones.length > 0
+          ? "Trechos inclinados usam profundidade linear e pressão hidrostática variável entre as extremidades."
+          : zones.length > 1
+            ? "Volume e pressões calculados por zonas; o resumo de parede usa a maior profundidade."
+            : "Resultado limitado ao caso de piscina cheia e a acao da agua.",
         "Nao representa dimensionamento ou aprovacao estrutural.",
         ...(profile.status === "draft" ? ["Perfil de parametros ainda nao revisado."] : [])
       ]
