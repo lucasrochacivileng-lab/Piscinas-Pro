@@ -25,6 +25,7 @@ export const DEFAULT_DESIGN_INPUT: Phase1DesignInput = {
   minimumSlabSteelRatio: 0.0015,
   masonry: {
     blockFamilyId: "jb-blocks-20x40",
+    blockClass: "A",
     blockStrengthMPa: 8,
     verticalGroutSpacingMm: 200,
     bondBeamCourseSpacing: 4
