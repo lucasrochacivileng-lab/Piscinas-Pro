@@ -1,18 +1,23 @@
 import {
   DEFAULT_BLOCK_FAMILIES,
+  DEFAULT_GEOTECHNICAL_INPUT,
   DEFAULT_MASONRY_SPECIFICATION,
+  STRUCTURAL_DESIGN_PROFILES,
   validateConcreteBlockStrength,
   type ConcreteBlockClass,
-  type Phase1DesignInput,
+  type IntegratedDesignInput,
+  type IntegratedMasonrySpecificationInput,
   type PoolDepthZoneInput,
-  type PoolDepthZoneKind
+  type PoolDepthZoneKind,
+  type SoilLayerInput,
+  type SoilType
 } from "@poolstruct/calculation-engine";
 import { useEffect, useState, type FormEvent } from "react";
 
 interface Props {
-  initialInput: Phase1DesignInput;
+  initialInput: IntegratedDesignInput;
   busy: boolean;
-  onCalculate(input: Phase1DesignInput): Promise<void>;
+  onCalculate(input: IntegratedDesignInput): Promise<void>;
 }
 
 interface NumberFieldProps {
@@ -36,16 +41,31 @@ const ZONE_KIND_LABEL: Readonly<Record<PoolDepthZoneKind, string>> = {
   MAIN: "Fundo principal"
 };
 
+const SOIL_TYPE_LABEL: Readonly<Record<SoilType, string>> = {
+  SAND: "Areia",
+  SILT: "Silte",
+  CLAY: "Argila",
+  FILL: "Aterro",
+  ROCK: "Rocha"
+};
+
 function NumberField({ label, value, unit, step = 1, min = 0, onChange }: NumberFieldProps) {
   return <label className="number-field"><span>{label}</span><div><input type="number" value={value} min={min} step={step} onChange={(event) => onChange(event.currentTarget.valueAsNumber)} required /><small>{unit}</small></div></label>;
 }
 
-const legacyZone = (input: Phase1DesignInput): PoolDepthZoneInput => ({
+const legacyZone = (input: IntegratedDesignInput): PoolDepthZoneInput => ({
   id: "main",
   label: "Fundo principal",
   kind: "MAIN",
   lengthMm: input.geometry.internalLengthMm,
   waterDepthMm: input.geometry.waterDepthMm
+});
+
+const defaultIntegratedMasonry = (): IntegratedMasonrySpecificationInput => ({
+  ...DEFAULT_MASONRY_SPECIFICATION,
+  mortarStrengthMPa: 4,
+  groutStrengthMPa: 15,
+  prismStrengthMPa: 4
 });
 
 export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
@@ -55,8 +75,11 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
   const zones = geometry.depthZones && geometry.depthZones.length > 0
     ? geometry.depthZones
     : [legacyZone(input)];
+  const geotechnical = input.geotechnical ?? DEFAULT_GEOTECHNICAL_INPUT;
+  const soilLayers = geotechnical.layers;
+
   const setGeometry = (
-    field: Exclude<keyof Phase1DesignInput["geometry"], "depthZones" | "waterDepthMm">,
+    field: Exclude<keyof IntegratedDesignInput["geometry"], "depthZones" | "waterDepthMm">,
     value: number
   ) => setInput((current) => {
     if (field !== "internalLengthMm") {
@@ -75,6 +98,7 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
       geometry: { ...current.geometry, internalLengthMm: adjustedLength, depthZones: currentZones }
     };
   });
+
   const setDepthZones = (nextZones: readonly PoolDepthZoneInput[]) => setInput((current) => {
     const internalLengthMm = nextZones.reduce((sum, zone) => sum + zone.lengthMm, 0);
     const waterDepthMm = Math.max(...nextZones.map((zone) => zone.waterDepthMm));
@@ -84,8 +108,7 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
     };
   });
   const updateZone = (index: number, patch: Partial<PoolDepthZoneInput>) => {
-    const next = zones.map((zone, zoneIndex) => zoneIndex === index ? { ...zone, ...patch } : zone);
-    setDepthZones(next);
+    setDepthZones(zones.map((zone, zoneIndex) => zoneIndex === index ? { ...zone, ...patch } : zone));
   };
   const addZone = () => {
     const current = [...zones];
@@ -120,25 +143,56 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
     if (next.length === 1 && next[0]) next[0] = { ...next[0], kind: "MAIN", label: "Fundo principal" };
     setDepthZones(next);
   };
-  const masonry = input.masonry ?? DEFAULT_MASONRY_SPECIFICATION;
+
+  const setGeotechnical = <K extends keyof typeof geotechnical>(field: K, value: (typeof geotechnical)[K]) => setInput((current) => ({
+    ...current,
+    geotechnical: { ...(current.geotechnical ?? DEFAULT_GEOTECHNICAL_INPUT), [field]: value }
+  }));
+  const updateSoilLayer = (index: number, patch: Partial<SoilLayerInput>) => {
+    const next = soilLayers.map((layer, layerIndex) => layerIndex === index ? { ...layer, ...patch } : layer);
+    setGeotechnical("layers", next);
+  };
+  const addSoilLayer = () => {
+    const previous = soilLayers.at(-1);
+    if (!previous) return;
+    const topDepthMm = previous.bottomDepthMm;
+    setGeotechnical("layers", [...soilLayers, {
+      id: `layer-${Date.now()}`,
+      label: `Camada ${soilLayers.length + 1}`,
+      soilType: previous.soilType,
+      topDepthMm,
+      bottomDepthMm: topDepthMm + 2000,
+      nspt: previous.nspt,
+      saturatedUnitWeightKNM3: previous.saturatedUnitWeightKNM3,
+      frictionAngleDegrees: previous.frictionAngleDegrees
+    }]);
+  };
+  const removeSoilLayer = (index: number) => {
+    if (soilLayers.length <= 1) return;
+    const next = soilLayers.filter((_, layerIndex) => layerIndex !== index).map((layer, layerIndex, all) => ({
+      ...layer,
+      topDepthMm: layerIndex === 0 ? 0 : all[layerIndex - 1]?.bottomDepthMm ?? layer.topDepthMm
+    }));
+    setGeotechnical("layers", next);
+  };
+
+  const masonry = input.masonry ?? defaultIntegratedMasonry();
   const blockClass = masonry.blockClass ?? "A";
   const strengthRule = validateConcreteBlockStrength(blockClass, masonry.blockStrengthMPa).rule;
-  const setValue = (field: Exclude<keyof Phase1DesignInput, "geometry" | "masonry">, value: number) => setInput((current) => ({ ...current, [field]: value }));
-  const setMasonry = (field: keyof typeof masonry, value: string | number) => setInput((current) => ({
+  const setValue = (field: Exclude<keyof IntegratedDesignInput, "geometry" | "masonry" | "geotechnical" | "normativeProfileId">, value: number) => setInput((current) => ({ ...current, [field]: value }));
+  const setMasonry = (field: keyof IntegratedMasonrySpecificationInput, value: string | number) => setInput((current) => ({
     ...current,
-    masonry: { ...(current.masonry ?? DEFAULT_MASONRY_SPECIFICATION), [field]: value }
+    masonry: { ...(current.masonry ?? defaultIntegratedMasonry()), [field]: value }
   }));
   const setBlockClass = (nextClass: ConcreteBlockClass) => setInput((current) => {
-    const currentMasonry = current.masonry ?? DEFAULT_MASONRY_SPECIFICATION;
+    const currentMasonry = current.masonry ?? defaultIntegratedMasonry();
     const keepStrength = validateConcreteBlockStrength(nextClass, currentMasonry.blockStrengthMPa).valid;
     return {
       ...current,
       masonry: {
         ...currentMasonry,
         blockClass: nextClass,
-        blockStrengthMPa: keepStrength
-          ? currentMasonry.blockStrengthMPa
-          : DEFAULT_STRENGTH_BY_CLASS[nextClass]
+        blockStrengthMPa: keepStrength ? currentMasonry.blockStrengthMPa : DEFAULT_STRENGTH_BY_CLASS[nextClass]
       }
     };
   });
@@ -149,7 +203,12 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
   }
 
   return <form className="editor" onSubmit={submit}>
-    <div className="section-title"><div><p className="eyebrow">Propriedades</p><h2>Modelo estrutural</h2></div><button className="primary calculate-button" disabled={busy}>{busy ? "Calculando…" : "Calcular e salvar revisão"}</button></div>
+    <div className="section-title"><div><p className="eyebrow">Propriedades</p><h2>Modelo integrado</h2></div><button className="primary calculate-button" disabled={busy}>{busy ? "Calculando…" : "Calcular e salvar revisão"}</button></div>
+
+    <fieldset><legend>Perfil de cálculo</legend><label className="select-field"><span>Perfil normativo / acadêmico</span><select value={input.normativeProfileId ?? "brazil-2026-preliminary"} onChange={(event) => setInput((current) => ({ ...current, normativeProfileId: event.currentTarget.value }))}>
+      {STRUCTURAL_DESIGN_PROFILES.map((profile) => <option value={profile.id} key={profile.id}>{profile.label} · v{profile.version}</option>)}
+    </select></label><small className="field-help">Perfis preliminares permanecem com revisão obrigatória; a versão escolhida fica gravada na revisão.</small></fieldset>
+
     <fieldset><legend>Geometria da piscina</legend><div className="form-grid">
       <NumberField label="Comprimento interno" value={geometry.internalLengthMm} unit="mm" min={100} onChange={(value) => setGeometry("internalLengthMm", value)} />
       <NumberField label="Largura interna" value={geometry.internalWidthMm} unit="mm" onChange={(value) => setGeometry("internalWidthMm", value)} />
@@ -163,9 +222,7 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
       {zones.map((zone, index) => <article className="depth-zone-card" key={zone.id}>
         <header><strong>Z{index + 1}</strong><span>{ZONE_KIND_LABEL[zone.kind]}</span>{zones.length > 1 && <button type="button" className="text-button" onClick={() => removeZone(index)}>Remover</button>}</header>
         <div className="form-grid">
-          <label className="select-field"><span>Tipo</span><select value={zone.kind} onChange={(event) => updateZone(index, { kind: event.currentTarget.value as PoolDepthZoneKind })}>
-            <option value="SHALLOW">Prainha / rasa</option><option value="INTERMEDIATE">Intermediária</option><option value="MAIN">Fundo principal</option>
-          </select></label>
+          <label className="select-field"><span>Tipo</span><select value={zone.kind} onChange={(event) => updateZone(index, { kind: event.currentTarget.value as PoolDepthZoneKind })}><option value="SHALLOW">Prainha / rasa</option><option value="INTERMEDIATE">Intermediária</option><option value="MAIN">Fundo principal</option></select></label>
           <label className="number-field"><span>Nome</span><div><input type="text" value={zone.label} onChange={(event) => updateZone(index, { label: event.currentTarget.value })} required /></div></label>
           <NumberField label="Comprimento" value={zone.lengthMm} unit="mm" min={100} onChange={(value) => updateZone(index, { lengthMm: value })} />
           <NumberField label="Profundidade d'água" value={zone.waterDepthMm} unit="mm" min={100} onChange={(value) => updateZone(index, { waterDepthMm: value })} />
@@ -173,32 +230,46 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
       </article>)}
       <small>Soma dos trechos: {zones.reduce((sum, zone) => sum + zone.lengthMm, 0)} mm · {zones.length} zona(s) · {Math.max(...zones.map((zone) => zone.waterDepthMm))} mm de profundidade máxima.</small>
     </div></fieldset>
-    <fieldset><legend>Alvenaria estrutural e modulação</legend><div className="block-specification">
-      <label className="select-field"><span>Família de blocos</span><select value={masonry.blockFamilyId} onChange={(event) => setMasonry("blockFamilyId", event.currentTarget.value)}>
-        {DEFAULT_BLOCK_FAMILIES.map((family) => <option value={family.id} key={family.id}>{family.label}</option>)}
-      </select></label>
-      <label className="select-field"><span>Classe do bloco</span><select value={blockClass} onChange={(event) => setBlockClass(event.currentTarget.value as ConcreteBlockClass)}>
-        <option value="A">Classe A</option><option value="B">Classe B</option><option value="C">Classe C</option>
-      </select></label>
-      <NumberField label="fbk especificado" value={masonry.blockStrengthMPa} unit="MPa" step={strengthRule.incrementMPa} min={strengthRule.minimumMPa} onChange={(value) => setMasonry("blockStrengthMPa", value)} />
-      <NumberField label="Graute vertical" value={masonry.verticalGroutSpacingMm} unit="mm" step={50} min={100} onChange={(value) => setMasonry("verticalGroutSpacingMm", value)} />
+
+    <fieldset><legend>Alvenaria, argamassa, graute e prisma</legend><div className="block-specification">
+      <label className="select-field"><span>Família de blocos</span><select value={masonry.blockFamilyId} onChange={(event) => setMasonry("blockFamilyId", event.currentTarget.value)}>{DEFAULT_BLOCK_FAMILIES.map((family) => <option value={family.id} key={family.id}>{family.label}</option>)}</select></label>
+      <label className="select-field"><span>Classe do bloco</span><select value={blockClass} onChange={(event) => setBlockClass(event.currentTarget.value as ConcreteBlockClass)}><option value="A">Classe A</option><option value="B">Classe B</option><option value="C">Classe C</option></select></label>
+      <NumberField label="fbk do bloco" value={masonry.blockStrengthMPa} unit="MPa" step={strengthRule.incrementMPa} min={strengthRule.minimumMPa} onChange={(value) => setMasonry("blockStrengthMPa", value)} />
+      <NumberField label="fak da argamassa" value={masonry.mortarStrengthMPa ?? 4} unit="MPa" step={0.5} min={1} onChange={(value) => setMasonry("mortarStrengthMPa", value)} />
+      <NumberField label="fgk do graute" value={masonry.groutStrengthMPa ?? 15} unit="MPa" step={1} min={1} onChange={(value) => setMasonry("groutStrengthMPa", value)} />
+      <NumberField label="fpk do prisma" value={masonry.prismStrengthMPa ?? 4} unit="MPa" step={0.5} min={1} onChange={(value) => setMasonry("prismStrengthMPa", value)} />
+      <NumberField label="Células grauteadas" value={masonry.verticalGroutSpacingMm} unit="mm" step={50} min={100} onChange={(value) => setMasonry("verticalGroutSpacingMm", value)} />
       <NumberField label="Cinta intermediária" value={masonry.bondBeamCourseSpacing} unit="fiadas" min={0} onChange={(value) => setMasonry("bondBeamCourseSpacing", value)} />
     </div>
     <div className="block-family-preview">{DEFAULT_BLOCK_FAMILIES.filter((family) => family.id === masonry.blockFamilyId).map((family) => <div key={family.id}>
-      <strong>{family.label}</strong><span>{family.manufacturer} · família normativa {family.normativeFamily} · largura {family.nominalWidthMm} mm</span><span>fiada {family.courseHeightMm} mm · junta {family.jointThicknessMm} mm · malha básica {family.coordinationGridMm} mm</span><span>{family.units.map((unit) => unit.label).join(" · ")}</span>
-      <small>ABNT NBR 6136-1:2026: Classe A ≥ 8 MPa em incrementos de 2 MPa; Classe B entre 4 e 6 MPa em incrementos de 2 MPa; Classe C ≥ 3 MPa em incrementos de 1 MPa.</small>
+      <strong>{family.label}</strong><span>{family.manufacturer} · família normativa {family.normativeFamily} · largura {family.nominalWidthMm} mm</span><span>Eficiência prisma/bloco informada: {((masonry.prismStrengthMPa ?? 4) / masonry.blockStrengthMPa).toFixed(2)}</span>
+      <small>Os quatro materiais devem representar o mesmo sistema de alvenaria e o mesmo plano de controle tecnológico.</small>
       {blockClass !== "A" && <small>Piscina enterrada: a utilização abaixo do nível do solo exige Classe A.</small>}
       {Math.abs(geometry.wallThicknessMm - family.nominalWidthMm) > 1 && <small>Espessura incompatível: ajuste a parede para {family.nominalWidthMm} mm ou escolha outra família.</small>}
-      {family.status === "catalog" && <small>Catálogo: {family.catalogDocument} · faixa declarada {family.catalogStrengthRangeMPa[0]}–{family.catalogStrengthRangeMPa[1]} MPa. Dimensões internas e aceitação dependem do lote fornecido.</small>}
-      {family.status === "draft" && <small>Família acadêmica: os dados resistentes do fabricante ainda precisam ser confirmados.</small>}
     </div>)}</div></fieldset>
-    <fieldset><legend>Solo e carregamentos</legend><div className="form-grid">
-      <NumberField label="Peso específico do solo saturado" value={input.saturatedSoilUnitWeightKNM3} unit="kN/m³" step={0.1} onChange={(value) => setValue("saturatedSoilUnitWeightKNM3", value)} />
-      <NumberField label="Ângulo de atrito" value={input.soilFrictionAngleDegrees} unit="graus" step={0.1} onChange={(value) => setValue("soilFrictionAngleDegrees", value)} />
-      <NumberField label="Nível d'água sobre a base mais profunda" value={input.groundwaterHeadAboveSlabBottomMm} unit="mm" onChange={(value) => setValue("groundwaterHeadAboveSlabBottomMm", value)} />
-      <NumberField label="Sobrecarga de utilização no fundo" value={input.imposedFloorLoadKPa} unit="kPa" step={0.1} onChange={(value) => setValue("imposedFloorLoadKPa", value)} />
-      <NumberField label="Peso específico da alvenaria" value={input.masonryUnitWeightKNM3} unit="kN/m³" step={0.1} onChange={(value) => setValue("masonryUnitWeightKNM3", value)} />
-    </div><small>O nível d'água é referenciado à face inferior da laje da zona mais profunda; o motor converte a carga para cada laje.</small></fieldset>
+
+    <fieldset><legend>Perfil SPT e água subterrânea</legend>
+      <div className="section-title"><div><p className="eyebrow">Geotecnia</p><h3>Camadas do solo</h3></div><button type="button" className="secondary" onClick={addSoilLayer}>Adicionar camada</button></div>
+      <p className="field-help">Profundidades medidas a partir do topo da piscina. O perfil deve ser contínuo e alcançar a face inferior da laje mais profunda.</p>
+      <div className="soil-layers-editor">{soilLayers.map((layer, index) => <article className="soil-layer-card" key={layer.id}>
+        <header><strong>S{index + 1}</strong><span>{SOIL_TYPE_LABEL[layer.soilType]}</span>{soilLayers.length > 1 && <button type="button" className="text-button" onClick={() => removeSoilLayer(index)}>Remover</button>}</header>
+        <div className="form-grid">
+          <label className="select-field"><span>Solo</span><select value={layer.soilType} onChange={(event) => updateSoilLayer(index, { soilType: event.currentTarget.value as SoilType })}>{Object.entries(SOIL_TYPE_LABEL).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+          <label className="number-field"><span>Descrição</span><div><input type="text" value={layer.label} onChange={(event) => updateSoilLayer(index, { label: event.currentTarget.value })} required /></div></label>
+          <NumberField label="Topo" value={layer.topDepthMm} unit="mm" min={0} onChange={(value) => updateSoilLayer(index, { topDepthMm: value })} />
+          <NumberField label="Base" value={layer.bottomDepthMm} unit="mm" min={1} onChange={(value) => updateSoilLayer(index, { bottomDepthMm: value })} />
+          <NumberField label="NSPT" value={layer.nspt} unit="golpes" min={1} step={1} onChange={(value) => updateSoilLayer(index, { nspt: value })} />
+          <NumberField label="Peso específico saturado" value={layer.saturatedUnitWeightKNM3} unit="kN/m³" step={0.1} min={1} onChange={(value) => updateSoilLayer(index, { saturatedUnitWeightKNM3: value })} />
+          <NumberField label="Ângulo de atrito" value={layer.frictionAngleDegrees} unit="graus" step={0.1} min={1} onChange={(value) => updateSoilLayer(index, { frictionAngleDegrees: value })} />
+        </div>
+      </article>)}</div>
+      <div className="form-grid detail-grid">
+        <NumberField label="Profundidade do nível d'água" value={geotechnical.groundwaterDepthBelowGradeMm} unit="mm" min={0} onChange={(value) => setGeotechnical("groundwaterDepthBelowGradeMm", value)} />
+        <NumberField label="Resistência permanente adicional" value={geotechnical.additionalPermanentResistanceKN} unit="kN" min={0} step={1} onChange={(value) => setGeotechnical("additionalPermanentResistanceKN", value)} />
+        <NumberField label="Sobrecarga de utilização no fundo" value={input.imposedFloorLoadKPa} unit="kPa" step={0.1} onChange={(value) => setValue("imposedFloorLoadKPa", value)} />
+        <NumberField label="Peso específico da alvenaria" value={input.masonryUnitWeightKNM3} unit="kN/m³" step={0.1} onChange={(value) => setValue("masonryUnitWeightKNM3", value)} />
+      </div><small>O motor deriva o peso específico representativo, adota o menor ângulo de atrito interceptado e converte o nível d'água em subpressão na base.</small></fieldset>
+
     <details><summary>Parâmetros de detalhamento</summary><div className="form-grid detail-grid">
       <NumberField label="Fator de altura efetiva (hef/h)" value={input.effectiveWallHeightFactor} unit="—" step={0.05} onChange={(value) => setValue("effectiveWallHeightFactor", value)} />
       <NumberField label="Coeficiente de ortogonalidade" value={input.orthogonalityCoefficient} unit="—" step={0.05} onChange={(value) => setValue("orthogonalityCoefficient", value)} />
@@ -210,6 +281,6 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
       <NumberField label="Cobrimento da laje" value={input.slabReinforcementCoverMm} unit="mm" onChange={(value) => setValue("slabReinforcementCoverMm", value)} />
       <NumberField label="Diâmetro da barra da laje" value={input.slabBarDiameterMm} unit="mm" step={0.5} onChange={(value) => setValue("slabBarDiameterMm", value)} />
       <NumberField label="Taxa mínima da laje" value={input.minimumSlabSteelRatio} unit="—" step={0.0001} onChange={(value) => setValue("minimumSlabSteelRatio", value)} />
-    </div><small>Para parede sem travamento lateral transversal, engastada na base e livre no topo, o valor inicial é hef/h = 2,0. Degraus usam hef/h = 1,0 e exigem revisão da ligação.</small></details>
+    </div><small>Degraus usam hef/h = 1,0 e exigem revisão da ligação. Correlações geotécnicas não substituem o laudo de sondagem.</small></details>
   </form>;
 }
