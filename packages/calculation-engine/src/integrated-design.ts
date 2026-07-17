@@ -1,4 +1,3 @@
-import type { ConcreteBlockClass } from "./block-standard.js";
 import type { EngineeringCheck, StructuralDesignProfile } from "./engineering.js";
 import { calculateGlobalFlotation, type GlobalFlotationResult } from "./flotation.js";
 import { designMasonryPanel } from "./masonry-design.js";
@@ -120,10 +119,10 @@ export function runIntegratedDesign(
     saturatedSoilUnitWeightKNM3: geotechnical.representativeSaturatedUnitWeightKNM3,
     soilFrictionAngleDegrees: geotechnical.representativeFrictionAngleDegrees,
     groundwaterHeadAboveSlabBottomMm: geotechnical.groundwaterHeadAboveDeepestSlabBottomMm,
-    masonry: input.masonry
+    ...(input.masonry ? { masonry: input.masonry } : {})
   };
   const base = runPhase1Design(resolvedInput, profile);
-  const masonryInput = input.masonry ?? DEFAULT_MASONRY_SPECIFICATION;
+  const masonryInput: IntegratedMasonrySpecificationInput = input.masonry ?? DEFAULT_MASONRY_SPECIFICATION;
   const mortarStrengthMPa = masonryInput.mortarStrengthMPa ?? 4;
   const groutStrengthMPa = masonryInput.groutStrengthMPa ?? 15;
   const prismStrengthMPa = masonryInput.prismStrengthMPa ?? Math.max(4, masonryInput.blockStrengthMPa * 0.5);
@@ -148,7 +147,11 @@ export function runIntegratedDesign(
       ...wall,
       design: bundle.value,
       checks: [
-        ...bundle.checks.map((check) => ({ ...check, id: `${wall.id}-${check.id}`, message: `${wall.label}: ${check.message}` })),
+        ...bundle.checks.map((check) => ({
+          ...check,
+          id: `${wall.id}-${check.id}`,
+          message: `${wall.label}: ${check.message}`
+        })),
         ...supportChecks
       ]
     };
@@ -157,8 +160,12 @@ export function runIntegratedDesign(
   const wallPanels = base.wallPanels.map(rebuildWall);
   const longCandidates = wallPanels.filter((wall) => wall.kind === "PERIMETER_LONG");
   const endCandidates = wallPanels.filter((wall) => wall.kind === "PERIMETER_END");
-  const longWall = longCandidates.reduce((governing, wall) => wallDemand(wall) > wallDemand(governing) ? wall : governing);
-  const shortWall = endCandidates.reduce((governing, wall) => wallDemand(wall) > wallDemand(governing) ? wall : governing);
+  const longWall = longCandidates.reduce((governing, wall) =>
+    wallDemand(wall) > wallDemand(governing) ? wall : governing
+  );
+  const shortWall = endCandidates.reduce((governing, wall) =>
+    wallDemand(wall) > wallDemand(governing) ? wall : governing
+  );
 
   const flotation = calculateGlobalFlotation({
     geometry: input.geometry,
@@ -197,14 +204,18 @@ export function runIntegratedDesign(
   };
   const materialChecks = constituentChecks(masonrySystem, profile);
   const masonryChecks = base.masonry ? [...base.masonry.checks, ...materialChecks] : materialChecks;
+  const oldWallCheckIds = new Set(base.wallPanels.flatMap((wall) => wall.checks.map((check) => check.id)));
+  const oldMasonryCheckIds = new Set(base.masonry?.checks.map((check) => check.id) ?? []);
+  const retainedBaseChecks = base.checks.filter((check) =>
+    !oldWallCheckIds.has(check.id) && !oldMasonryCheckIds.has(check.id)
+  );
   const checks = [
-    ...base.loadCases ? base.loadCases && [] : [],
+    ...retainedBaseChecks,
     ...geotechnical.checks,
     bearingCheck,
     ...flotation.checks,
     profileCheck,
     ...wallPanels.flatMap((wall) => wall.checks),
-    ...base.slabZones.flatMap((zone) => zone.checks),
     ...masonryChecks
   ];
   const overallStatus = checks.some((check) => check.governing !== false && check.status === "FAIL")
@@ -212,6 +223,19 @@ export function runIntegratedDesign(
     : checks.some((check) => check.governing !== false && check.status === "REQUIRES_REVIEW")
       ? "REQUIRES_REVIEW"
       : "PASS";
+
+  const integratedMasonry: IntegratedMasonryResult | null = base.masonry ? {
+    ...base.masonry,
+    mortarStrengthMPa,
+    groutStrengthMPa,
+    prismStrengthMPa,
+    prismToBlockEfficiency: prismStrengthMPa / masonryInput.blockStrengthMPa,
+    checks: masonryChecks,
+    warnings: [
+      ...base.masonry.warnings,
+      "Argamassa, graute e prisma devem ser vinculados ao plano de controle tecnológico da obra."
+    ]
+  } : null;
 
   return {
     ...base,
@@ -224,19 +248,7 @@ export function runIntegratedDesign(
     longWall,
     shortWall,
     wallPanels,
-    masonry: base.masonry ? {
-      ...base.masonry,
-      blockClass: base.masonry.blockClass as ConcreteBlockClass,
-      mortarStrengthMPa,
-      groutStrengthMPa,
-      prismStrengthMPa,
-      prismToBlockEfficiency: prismStrengthMPa / masonryInput.blockStrengthMPa,
-      checks: masonryChecks,
-      warnings: [
-        ...base.masonry.warnings,
-        "Argamassa, graute e prisma devem ser vinculados ao plano de controle tecnológico da obra."
-      ]
-    } : undefined,
+    ...(integratedMasonry ? { masonry: integratedMasonry } : {}),
     checks,
     overallStatus,
     warnings: [
