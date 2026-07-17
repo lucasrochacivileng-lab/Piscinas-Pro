@@ -44,10 +44,10 @@ select policies_are('public', 'calculation_runs', array[
 ]);
 select policies_are('public', 'audit_events', array['audit_select_own']);
 
-select has_index('public', 'projects', 'projects_owner_id_idx');
-select has_index('public', 'project_revisions', 'project_revisions_owner_id_idx');
-select has_index('public', 'calculation_runs', 'calculation_runs_owner_id_idx');
-select has_index('public', 'audit_events', 'audit_events_owner_id_created_at_idx');
+select has_index('public', 'projects', 'projects_owner_id_idx', 'projects owner index exists');
+select has_index('public', 'project_revisions', 'project_revisions_owner_id_idx', 'project revisions owner index exists');
+select has_index('public', 'calculation_runs', 'calculation_runs_owner_id_idx', 'calculation runs owner index exists');
+select has_index('public', 'audit_events', 'audit_events_owner_id_created_at_idx', 'audit events owner and created at index exists');
 select has_function('public', 'save_calculation_revision', array[
   'uuid', 'jsonb', 'text', 'text', 'text', 'text', 'text', 'jsonb', 'jsonb', 'jsonb'
 ]);
