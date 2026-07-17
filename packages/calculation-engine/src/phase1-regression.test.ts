@@ -39,7 +39,7 @@ describe("regressões integradas da Fase 3", () => {
     expect(result.hydrostatic.approximateCapacityLitres).toBe(44_800);
     expect(result.hydrostatic.maximumWallPressureKPa).toBe(14);
     expect(result.hydrostatic.wallBaseMomentKNMPerM).toBeCloseTo(4.5733333333, 8);
-    expect(result.engineVersion).toBe("phase1-1.2.0");
+    expect(result.engineVersion).toBe("phase1-1.3.0");
   });
 
   it("é determinístico para entradas e perfil idênticos", () => {

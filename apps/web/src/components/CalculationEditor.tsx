@@ -1,6 +1,8 @@
 import {
   DEFAULT_BLOCK_FAMILIES,
   DEFAULT_MASONRY_SPECIFICATION,
+  validateConcreteBlockStrength,
+  type ConcreteBlockClass,
   type Phase1DesignInput
 } from "@poolstruct/calculation-engine";
 import { useEffect, useState, type FormEvent } from "react";
@@ -20,6 +22,12 @@ interface NumberFieldProps {
   onChange(value: number): void;
 }
 
+const DEFAULT_STRENGTH_BY_CLASS: Readonly<Record<ConcreteBlockClass, number>> = {
+  A: 8,
+  B: 4,
+  C: 3
+};
+
 function NumberField({ label, value, unit, step = 1, min = 0, onChange }: NumberFieldProps) {
   return <label className="number-field"><span>{label}</span><div><input type="number" value={value} min={min} step={step} onChange={(event) => onChange(event.currentTarget.valueAsNumber)} required /><small>{unit}</small></div></label>;
 }
@@ -30,11 +38,27 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
   const geometry = input.geometry;
   const setGeometry = (field: keyof Phase1DesignInput["geometry"], value: number) => setInput((current) => ({ ...current, geometry: { ...current.geometry, [field]: value } }));
   const masonry = input.masonry ?? DEFAULT_MASONRY_SPECIFICATION;
+  const blockClass = masonry.blockClass ?? "A";
+  const strengthRule = validateConcreteBlockStrength(blockClass, masonry.blockStrengthMPa).rule;
   const setValue = (field: Exclude<keyof Phase1DesignInput, "geometry" | "masonry">, value: number) => setInput((current) => ({ ...current, [field]: value }));
   const setMasonry = (field: keyof typeof masonry, value: string | number) => setInput((current) => ({
     ...current,
     masonry: { ...(current.masonry ?? DEFAULT_MASONRY_SPECIFICATION), [field]: value }
   }));
+  const setBlockClass = (nextClass: ConcreteBlockClass) => setInput((current) => {
+    const currentMasonry = current.masonry ?? DEFAULT_MASONRY_SPECIFICATION;
+    const keepStrength = validateConcreteBlockStrength(nextClass, currentMasonry.blockStrengthMPa).valid;
+    return {
+      ...current,
+      masonry: {
+        ...currentMasonry,
+        blockClass: nextClass,
+        blockStrengthMPa: keepStrength
+          ? currentMasonry.blockStrengthMPa
+          : DEFAULT_STRENGTH_BY_CLASS[nextClass]
+      }
+    };
+  });
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -54,7 +78,12 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
       <label className="select-field"><span>Família de blocos</span><select value={masonry.blockFamilyId} onChange={(event) => setMasonry("blockFamilyId", event.currentTarget.value)}>
         {DEFAULT_BLOCK_FAMILIES.map((family) => <option value={family.id} key={family.id}>{family.label}</option>)}
       </select></label>
-      <NumberField label="fbk especificado" value={masonry.blockStrengthMPa} unit="MPa" step={1} min={3} onChange={(value) => setMasonry("blockStrengthMPa", value)} />
+      <label className="select-field"><span>Classe do bloco</span><select value={blockClass} onChange={(event) => setBlockClass(event.currentTarget.value as ConcreteBlockClass)}>
+        <option value="A">Classe A</option>
+        <option value="B">Classe B</option>
+        <option value="C">Classe C</option>
+      </select></label>
+      <NumberField label="fbk especificado" value={masonry.blockStrengthMPa} unit="MPa" step={strengthRule.incrementMPa} min={strengthRule.minimumMPa} onChange={(value) => setMasonry("blockStrengthMPa", value)} />
       <NumberField label="Graute vertical" value={masonry.verticalGroutSpacingMm} unit="mm" step={50} min={100} onChange={(value) => setMasonry("verticalGroutSpacingMm", value)} />
       <NumberField label="Cinta intermediária" value={masonry.bondBeamCourseSpacing} unit="fiadas" min={0} onChange={(value) => setMasonry("bondBeamCourseSpacing", value)} />
     </div>
@@ -63,8 +92,10 @@ export function CalculationEditor({ initialInput, busy, onCalculate }: Props) {
       <span>{family.manufacturer} · família normativa {family.normativeFamily} · largura {family.nominalWidthMm} mm</span>
       <span>fiada {family.courseHeightMm} mm · junta {family.jointThicknessMm} mm · malha básica {family.coordinationGridMm} mm</span>
       <span>{family.units.map((unit) => unit.label).join(" · ")}</span>
+      <small>ABNT NBR 6136-1:2026: Classe A ≥ 8 MPa em incrementos de 2 MPa; Classe B entre 4 e 6 MPa em incrementos de 2 MPa; Classe C ≥ 3 MPa em incrementos de 1 MPa.</small>
+      {blockClass !== "A" && <small>Piscina enterrada: a utilização abaixo do nível do solo exige Classe A.</small>}
       {Math.abs(geometry.wallThicknessMm - family.nominalWidthMm) > 1 && <small>Espessura incompatível: ajuste a parede para {family.nominalWidthMm} mm ou escolha outra família.</small>}
-      {family.status === "catalog" && <small>Catálogo: {family.catalogDocument} · faixa declarada {family.catalogStrengthRangeMPa[0]}–{family.catalogStrengthRangeMPa[1]} MPa. Critério conservador da edição 2016 fornecida: Classe A, fbk ≥ 8 MPa. Revisar pela NBR 6136-1:2026 vigente.</small>}
+      {family.status === "catalog" && <small>Catálogo: {family.catalogDocument} · faixa declarada {family.catalogStrengthRangeMPa[0]}–{family.catalogStrengthRangeMPa[1]} MPa. Dimensões internas e aceitação dependem do lote fornecido.</small>}
       {family.status === "draft" && <small>Família acadêmica: os dados resistentes do fabricante ainda precisam ser confirmados.</small>}
     </div>)}</div>
     </fieldset>

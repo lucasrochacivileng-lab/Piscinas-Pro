@@ -31,19 +31,21 @@ describe("runPhase1Design", () => {
   it("executa o fluxo completo da Fase 1 para piscina 8 x 4 m", () => {
     const result = runPhase1Design(input, SILVA_2022_PHASE1_PROFILE);
 
-    expect(result.engineVersion).toBe("phase1-1.2.0");
+    expect(result.engineVersion).toBe("phase1-1.3.0");
     expect(result.hydrostatic.waterVolumeM3).toBeCloseTo(44.8);
     expect(result.longWall.actions.analysisMethod).toBe("VERTICAL_CANTILEVER");
     expect(result.shortWall.actions.analysisMethod).toBe("TWO_WAY_TABLE");
     expect(result.slab.bottomX.layout.providedAreaMm2PerM).toBeGreaterThan(0);
     expect(result.masonry?.family.id).toBe("jb-blocks-20x40");
     expect(result.masonry?.blockClass).toBe("A");
+    expect(result.masonry?.checks.find((check) => check.id === "nbr-6136-1-2026-strength-class")?.status).toBe("PASS");
     expect(result.masonry?.checks.find((check) => check.id === "nbr-6136-below-grade-class-a")?.status).toBe("PASS");
-    expect(result.masonry?.checks.find((check) => check.id === "current-block-standard-edition")?.status).toBe("REQUIRES_REVIEW");
+    expect(result.masonry?.checks.find((check) => check.id === "current-block-standard-edition")?.status).toBe("PASS");
+    expect(result.masonry?.checks.find((check) => check.id === "nbr-6136-1-2026-dimensional-tolerances")?.status).toBe("REQUIRES_REVIEW");
     expect(result.masonry?.modulation.totalBlocks).toBeGreaterThan(0);
     expect(result.masonry?.modulation.totalChannelBlocks).toBeGreaterThan(0);
     expect(result.masonry?.checks.some((check) => check.id === "grout-spacing-covers-vertical-bars")).toBe(true);
-    expect(result.checks.length).toBeGreaterThan(10);
+    expect(result.checks.length).toBeGreaterThan(15);
     expect(result.overallStatus).toBe("REQUIRES_REVIEW");
   });
 
@@ -62,6 +64,7 @@ describe("runPhase1Design", () => {
       geometry: { ...input.geometry, wallThicknessMm: 140 },
       masonry: {
         blockFamilyId: "academic-block-family-m15",
+        blockClass: "A",
         blockStrengthMPa: 8,
         verticalGroutSpacingMm: 150,
         bondBeamCourseSpacing: 4
@@ -70,6 +73,7 @@ describe("runPhase1Design", () => {
 
     expect(result.masonry?.family.id).toBe("academic-block-family-m15");
     expect(result.masonry?.checks.find((check) => check.id === "junction-thickness-modular")?.status).toBe("PASS");
+    expect(result.masonry?.checks.find((check) => check.id === "nbr-6136-1-2026-nominal-family")?.status).toBe("PASS");
   });
 
   it("rejeita familia de blocos desconhecida", () => {
@@ -77,6 +81,7 @@ describe("runPhase1Design", () => {
       ...input,
       masonry: {
         blockFamilyId: "fabricante-inexistente",
+        blockClass: "A",
         blockStrengthMPa: 8,
         verticalGroutSpacingMm: 200,
         bondBeamCourseSpacing: 4
@@ -89,6 +94,7 @@ describe("runPhase1Design", () => {
       ...input,
       masonry: {
         blockFamilyId: "jb-blocks-20x40",
+        blockClass: "B",
         blockStrengthMPa: 6,
         verticalGroutSpacingMm: 200,
         bondBeamCourseSpacing: 4
@@ -96,7 +102,39 @@ describe("runPhase1Design", () => {
     }, SILVA_2022_PHASE1_PROFILE);
 
     expect(result.masonry?.blockClass).toBe("B");
+    expect(result.masonry?.checks.find((check) => check.id === "nbr-6136-1-2026-strength-class")?.status).toBe("PASS");
     expect(result.masonry?.checks.find((check) => check.id === "nbr-6136-below-grade-class-a")?.status).toBe("FAIL");
     expect(result.overallStatus).toBe("FAIL");
+  });
+
+  it("reprova resistência fora da faixa discreta da classe declarada", () => {
+    const result = runPhase1Design({
+      ...input,
+      masonry: {
+        blockFamilyId: "jb-blocks-20x40",
+        blockClass: "B",
+        blockStrengthMPa: 5,
+        verticalGroutSpacingMm: 200,
+        bondBeamCourseSpacing: 4
+      }
+    }, SILVA_2022_PHASE1_PROFILE);
+
+    expect(result.masonry?.checks.find((check) => check.id === "nbr-6136-1-2026-strength-class")?.status).toBe("FAIL");
+    expect(result.overallStatus).toBe("FAIL");
+  });
+
+  it("mantém compatibilidade com revisão legada sem classe explícita", () => {
+    const result = runPhase1Design({
+      ...input,
+      masonry: {
+        blockFamilyId: "jb-blocks-20x40",
+        blockStrengthMPa: 8,
+        verticalGroutSpacingMm: 200,
+        bondBeamCourseSpacing: 4
+      }
+    }, SILVA_2022_PHASE1_PROFILE);
+
+    expect(result.masonry?.blockClass).toBe("A");
+    expect(result.masonry?.checks.find((check) => check.id === "nbr-6136-1-2026-strength-class")?.status).toBe("PASS");
   });
 });
