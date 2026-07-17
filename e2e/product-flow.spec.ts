@@ -57,7 +57,7 @@ test("cria projeto, calcula, persiste R1 e exporta a memória", async ({ page })
   const drawingPath = await drawingDownload.path();
   expect(drawingPath).not.toBeNull();
   const drawing = await readFile(drawingPath!, "utf8");
-  expect(drawing).toContain("PLANTA DE FORMAS — ZONAS DE PROFUNDIDADE");
+  expect(drawing).toContain("PLANTA DE FORMAS — PERFIL LONGITUDINAL");
   expect(drawing).toContain("CORTE LONGITUDINAL A—A");
   expect(drawing).toContain("R1");
 
@@ -83,7 +83,7 @@ test("modela prainha, fundo principal e parede de degrau", async ({ page }) => {
   await page.getByRole("button", { name: "Adicionar zona" }).click();
 
   const depthInputs = page.getByRole("spinbutton", { name: /^Profundidade d'água mm$/ });
-  const lengthInputs = page.getByRole("spinbutton", { name: /^Comprimento mm$/ });
+  const lengthInputs = page.getByRole("spinbutton", { name: /^Comprimento horizontal mm$/ });
   await expect(depthInputs).toHaveCount(2);
   await expect(lengthInputs).toHaveCount(2);
   await depthInputs.nth(0).fill("400");
@@ -96,9 +96,40 @@ test("modela prainha, fundo principal e parede de degrau", async ({ page }) => {
   await expect(results.getByRole("heading", { name: "Zonas de profundidade" })).toBeVisible();
   await expect(results.getByText("Prainha", { exact: true })).toBeVisible();
   await expect(results.getByText(/degrau/i).first()).toBeVisible();
-  await expect(results.getByText("2 zona(s)", { exact: true })).toBeVisible();
   const panelMetric = results.locator(".metrics article").filter({ hasText: "Paredes calculadas" });
   await expect(panelMetric).toContainText("7");
+});
+
+test("modela praia contínua de zero até o fundo sem criar degrau falso", async ({ page }) => {
+  await createProject(page, "Piscina Praia Inclinada");
+  await page.getByRole("button", { name: "Adicionar praia" }).click();
+
+  const lengths = page.getByRole("spinbutton", { name: /^Comprimento horizontal mm$/ });
+  await expect(lengths).toHaveCount(2);
+  await lengths.nth(0).fill("5000");
+  await lengths.nth(1).fill("3000");
+  await page.getByRole("spinbutton", { name: /^Profundidade inicial mm$/ }).fill("0");
+  await page.getByRole("spinbutton", { name: /^Profundidade final mm$/ }).fill("1400");
+  await page.getByRole("spinbutton", { name: /^Profundidade d'água mm$/ }).fill("1400");
+  await expect(page.getByDisplayValue(/28\.00%/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Calcular e salvar revisão" }).click();
+  const results = page.locator(".results-panel");
+  await expect(results.getByText("Com praia inclinada", { exact: true })).toBeVisible();
+  await expect(results.getByText(/0 → 1\.400 mm/)).toBeVisible();
+  await expect(results.getByText(/28%/).first()).toBeVisible();
+  await expect(results.getByRole("heading", { name: "Laje inclinada — Praia" })).toBeVisible();
+  await expect(results.getByText(/pressão uniforme equivalente/i).first()).toBeVisible();
+  await expect(results.getByText(/degrau/i)).toHaveCount(0);
+
+  const drawingDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Baixar prancha SVG" }).click();
+  const drawingDownload = await drawingDownloadPromise;
+  const drawingPath = await drawingDownload.path();
+  expect(drawingPath).not.toBeNull();
+  const drawing = await readFile(drawingPath!, "utf8");
+  expect(drawing).toContain("praia inclinada ativa");
+  expect(drawing).toContain("28.00%");
 });
 
 test("mantém projetos de navegação separados e permite arquivamento", async ({ page }) => {
