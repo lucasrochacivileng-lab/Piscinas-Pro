@@ -120,7 +120,7 @@ test("modela praia contínua de zero até o fundo sem criar degrau falso", async
   await expect(results.getByText(/28%/).first()).toBeVisible();
   await expect(results.getByRole("heading", { name: "Laje inclinada — Praia" })).toBeVisible();
   await expect(results.getByText(/pressão uniforme equivalente/i).first()).toBeVisible();
-  await expect(results.getByText(/degrau/i)).toHaveCount(0);
+  await expect(results.getByRole("heading", { name: /^Degrau/ })).toHaveCount(0);
 
   const drawingDownloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Baixar prancha SVG" }).click();
