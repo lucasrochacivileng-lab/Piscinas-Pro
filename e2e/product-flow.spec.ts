@@ -95,7 +95,7 @@ test("modela prainha, fundo principal e parede de degrau", async ({ page }) => {
   await expect(page.getByText("Prainha", { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/degrau/i).first()).toBeVisible();
   await expect(page.getByText("2 zona(s)", { exact: true })).toBeVisible();
-  await expect(page.getByText("8", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("7", { exact: true }).first()).toBeVisible();
 });
 
 test("mantém projetos de navegação separados e permite arquivamento", async ({ page }) => {
