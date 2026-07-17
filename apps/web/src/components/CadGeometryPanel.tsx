@@ -25,10 +25,21 @@ interface Props {
   readonly projectName: string;
   readonly document: CadGeometryDocument;
   readonly onChange: (document: CadGeometryDocument) => void;
-  readonly onApplyEnvelope: (geometry: { lengthMm: number; widthMm: number; maximumDepthMm?: number }) => void;
+  readonly onApplyEnvelope: (geometry: {
+    lengthMm: number;
+    widthMm: number;
+    maximumDepthMm?: number;
+  }) => void;
 }
 
-type CadTool = "SELECT" | "CALIBRATE" | "BOUNDARY_LINE" | "BOUNDARY_CURVE" | "BREAKLINE_LINE" | "BREAKLINE_CURVE" | "DEPTH";
+type CadTool =
+  | "SELECT"
+  | "CALIBRATE"
+  | "BOUNDARY_LINE"
+  | "BOUNDARY_CURVE"
+  | "BREAKLINE_LINE"
+  | "BREAKLINE_CURVE"
+  | "DEPTH";
 
 interface DragTarget {
   readonly pathId: string;
@@ -46,12 +57,28 @@ const TOOL_LABEL: Readonly<Record<CadTool, string>> = {
   DEPTH: "Profundidade"
 };
 
-const isDrawingTool = (tool: CadTool): boolean => ["BOUNDARY_LINE", "BOUNDARY_CURVE", "BREAKLINE_LINE", "BREAKLINE_CURVE"].includes(tool);
+const DRAWING_TOOLS: readonly CadTool[] = [
+  "BOUNDARY_LINE",
+  "BOUNDARY_CURVE",
+  "BREAKLINE_LINE",
+  "BREAKLINE_CURVE"
+];
+
+const isDrawingTool = (tool: CadTool): boolean => DRAWING_TOOLS.includes(tool);
 const pathRole = (tool: CadTool): CadPathRole => tool.startsWith("BOUNDARY") ? "BOUNDARY" : "BREAKLINE";
 const pathCurve = (tool: CadTool): CadPathCurve => tool.endsWith("CURVE") ? "SMOOTH" : "POLYLINE";
-const format = (value: number | null, digits = 2): string => value === null ? "—" : new Intl.NumberFormat("pt-BR", { maximumFractionDigits: digits }).format(value);
+const format = (value: number | null, digits = 2): string => value === null
+  ? "—"
+  : new Intl.NumberFormat("pt-BR", { maximumFractionDigits: digits }).format(value);
 
-export function CadGeometryPanel({ ownerId, projectId, projectName, document: model, onChange, onApplyEnvelope }: Props) {
+export function CadGeometryPanel({
+  ownerId,
+  projectId,
+  projectName,
+  document: model,
+  onChange,
+  onApplyEnvelope
+}: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backgroundUrlRef = useRef<string | null>(null);
@@ -67,7 +94,7 @@ export function CadGeometryPanel({ ownerId, projectId, projectName, document: mo
   const [zoom, setZoom] = useState(1);
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   const [backgroundMime, setBackgroundMime] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string>("Importe a planta e calibre uma medida conhecida antes de desenhar.");
+  const [notice, setNotice] = useState("Importe a planta e calibre uma medida conhecida antes de desenhar.");
   const measurements = useMemo(() => measureCadGeometry(model), [model]);
   const selectedPath = model.paths.find((path) => path.id === selectedPathId) ?? null;
 
@@ -86,10 +113,6 @@ export function CadGeometryPanel({ ownerId, projectId, projectName, document: mo
         setCalibrationPoints([]);
         setSelectedPathId(null);
         setSelectedDepthId(null);
-      }
-      if (event.key === "Enter" && isDrawingTool(tool)) {
-        event.preventDefault();
-        finishPath();
       }
       if ((event.key === "Delete" || event.key === "Backspace") && (selectedPathId || selectedDepthId)) {
         event.preventDefault();
@@ -120,7 +143,7 @@ export function CadGeometryPanel({ ownerId, projectId, projectName, document: mo
 
     if (tool === "CALIBRATE") {
       const next = [...calibrationPoints, nextPoint];
-      if (next.length < 2) {
+      if (next.length === 1) {
         setCalibrationPoints(next);
         setNotice("Clique no segundo ponto da medida conhecida.");
         return;
@@ -159,7 +182,9 @@ export function CadGeometryPanel({ ownerId, projectId, projectName, document: mo
     const role = pathRole(tool);
     const minimum = role === "BOUNDARY" ? 3 : 2;
     if (draftPoints.length < minimum) {
-      setNotice(role === "BOUNDARY" ? "O contorno precisa de pelo menos três pontos." : "A linha de quebra precisa de pelo menos dois pontos.");
+      setNotice(role === "BOUNDARY"
+        ? "O contorno precisa de pelo menos três pontos."
+        : "A linha de quebra precisa de pelo menos dois pontos.");
       return;
     }
     const count = model.paths.filter((path) => path.role === role).length + 1;
@@ -183,7 +208,9 @@ export function CadGeometryPanel({ ownerId, projectId, projectName, document: mo
       update({ ...model, paths: model.paths.filter((path) => path.id !== selectedPathId) });
       setSelectedPathId(null);
       setNotice("Caminho excluído.");
-    } else if (selectedDepthId) {
+      return;
+    }
+    if (selectedDepthId) {
       update({ ...model, depthMarkers: model.depthMarkers.filter((marker) => marker.id !== selectedDepthId) });
       setSelectedDepthId(null);
       setNotice("Cota de profundidade excluída.");
@@ -199,7 +226,11 @@ export function CadGeometryPanel({ ownerId, projectId, projectName, document: mo
     });
   }
 
-  function handlePointPointerDown(event: ReactPointerEvent<SVGCircleElement>, pathId: string, pointIndex: number) {
+  function handlePointPointerDown(
+    event: ReactPointerEvent<SVGCircleElement>,
+    pathId: string,
+    pointIndex: number
+  ) {
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragTarget({ pathId, pointIndex, pointerId: event.pointerId });
@@ -211,10 +242,9 @@ export function CadGeometryPanel({ ownerId, projectId, projectName, document: mo
   }
 
   function handlePointPointerUp(event: ReactPointerEvent<SVGCircleElement>) {
-    if (dragTarget?.pointerId === event.pointerId) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-      setDragTarget(null);
-    }
+    if (dragTarget?.pointerId !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    setDragTarget(null);
   }
 
   function chooseTool(nextTool: CadTool) {
@@ -223,7 +253,9 @@ export function CadGeometryPanel({ ownerId, projectId, projectName, document: mo
     setCalibrationPoints([]);
     setSelectedPathId(null);
     setSelectedDepthId(null);
-    setNotice(nextTool === "CALIBRATE" ? "Clique nos dois extremos da medida conhecida." : `${TOOL_LABEL[nextTool]} ativo.`);
+    setNotice(nextTool === "CALIBRATE"
+      ? "Clique nos dois extremos da medida conhecida."
+      : `${TOOL_LABEL[nextTool]} ativo.`);
   }
 
   function importBackground(event: ChangeEvent<HTMLInputElement>) {
@@ -263,7 +295,7 @@ export function CadGeometryPanel({ ownerId, projectId, projectName, document: mo
   function clearGeometry() {
     if (!window.confirm("Limpar contornos, linhas de quebra, cotas e calibração deste desenho?")) return;
     const empty = createEmptyCadGeometryDocument();
-    update({ ...empty, background: model.background });
+    update(model.background ? { ...empty, background: model.background } : empty);
     setDraftPoints([]);
     setSelectedPathId(null);
     setSelectedDepthId(null);
@@ -287,7 +319,9 @@ export function CadGeometryPanel({ ownerId, projectId, projectName, document: mo
     onApplyEnvelope({
       lengthMm: measurements.envelopeLengthMm,
       widthMm: measurements.envelopeWidthMm,
-      maximumDepthMm: measurements.maximumDepthMm ?? undefined
+      ...(measurements.maximumDepthMm !== null
+        ? { maximumDepthMm: measurements.maximumDepthMm }
+        : {})
     });
     setNotice("Envelope alinhado aos eixos aplicado ao modelo paramétrico. Confira as zonas de profundidade.");
   }
@@ -300,15 +334,25 @@ export function CadGeometryPanel({ ownerId, projectId, projectName, document: mo
     <header className="cad-header">
       <div><p className="eyebrow">Geometria vetorial</p><h2>CAD 2D da piscina</h2></div>
       <div className="cad-header-actions">
-        <span className={measurements.calibrated ? "cad-badge calibrated" : "cad-badge"}>{measurements.calibrated ? "CALIBRADO" : "SEM ESCALA"}</span>
-        <button type="button" className="secondary" onClick={() => setExpanded((current) => !current)}>{expanded ? "Recolher" : "Abrir CAD"}</button>
+        <span className={measurements.calibrated ? "cad-badge calibrated" : "cad-badge"}>
+          {measurements.calibrated ? "CALIBRADO" : "SEM ESCALA"}
+        </span>
+        <button type="button" className="secondary" onClick={() => setExpanded((current) => !current)}>
+          {expanded ? "Recolher" : "Abrir CAD"}
+        </button>
       </div>
     </header>
     {expanded && <>
       <div className="cad-toolbar" role="toolbar" aria-label="Ferramentas CAD 2D">
         <input ref={fileInputRef} className="cad-file-input" type="file" accept="application/pdf,image/*" onChange={importBackground} />
         <button type="button" className="secondary" onClick={() => fileInputRef.current?.click()}>Importar PDF/imagem</button>
-        {(Object.keys(TOOL_LABEL) as CadTool[]).map((item) => <button key={item} type="button" className={tool === item ? "cad-tool active" : "cad-tool"} aria-pressed={tool === item} onClick={() => chooseTool(item)}>{TOOL_LABEL[item]}</button>)}
+        {(Object.keys(TOOL_LABEL) as CadTool[]).map((item) => <button
+          key={item}
+          type="button"
+          className={tool === item ? "cad-tool active" : "cad-tool"}
+          aria-pressed={tool === item}
+          onClick={() => chooseTool(item)}
+        >{TOOL_LABEL[item]}</button>)}
         <button type="button" className="cad-tool" disabled={!isDrawingTool(tool)} onClick={finishPath}>Finalizar</button>
         <button type="button" className="cad-tool" disabled={draftPoints.length === 0} onClick={() => setDraftPoints((points) => points.slice(0, -1))}>Desfazer ponto</button>
         <button type="button" className="cad-tool danger" disabled={!selectedPathId && !selectedDepthId} onClick={deleteSelection}>Excluir</button>
@@ -320,26 +364,79 @@ export function CadGeometryPanel({ ownerId, projectId, projectName, document: mo
         <label>Fundo <span><input aria-label="Opacidade do fundo" type="range" min="0.15" max="1" step="0.05" disabled={!model.background} value={model.background?.opacity ?? 0.72} onChange={(event) => setBackgroundOpacity(event.currentTarget.valueAsNumber)} /></span></label>
         {model.background && <button type="button" className="text-button" onClick={removeBackground}>Remover fundo</button>}
       </div>
-      {model.background && !backgroundUrl && <p className="cad-background-warning">A referência “{model.background.fileName}” foi salva, mas o arquivo não é enviado ao banco. Reimporte-o nesta sessão para vê-lo ao fundo.</p>}
+      {model.background && !backgroundUrl && <p className="cad-background-warning">
+        A referência “{model.background.fileName}” foi salva, mas o arquivo não é enviado ao banco. Reimporte-o nesta sessão para vê-lo ao fundo.
+      </p>}
       <div className="cad-viewport">
         <div className="cad-sheet" style={{ width: model.canvasWidth * zoom, height: model.canvasHeight * zoom }}>
-          {backgroundUrl && backgroundMime?.includes("pdf") && <object className="cad-background" style={{ opacity: model.background?.opacity ?? 0.72 }} data={`${backgroundUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=Fit`} type="application/pdf" aria-label="PDF de fundo" />}
-          {backgroundUrl && !backgroundMime?.includes("pdf") && <img className="cad-background" style={{ opacity: model.background?.opacity ?? 0.72 }} src={backgroundUrl} alt="Planta de fundo" />}
-          <svg ref={svgRef} className="cad-canvas" viewBox={`0 0 ${model.canvasWidth} ${model.canvasHeight}`} style={{ cursor }} onClick={handleCanvasClick} onDoubleClick={() => finishPath()} aria-label="Prancheta CAD 2D">
+          {backgroundUrl && backgroundMime?.includes("pdf") && <object
+            className="cad-background"
+            style={{ opacity: model.background?.opacity ?? 0.72 }}
+            data={`${backgroundUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=Fit`}
+            type="application/pdf"
+            aria-label="PDF de fundo"
+          />}
+          {backgroundUrl && !backgroundMime?.includes("pdf") && <img
+            className="cad-background"
+            style={{ opacity: model.background?.opacity ?? 0.72 }}
+            src={backgroundUrl}
+            alt="Planta de fundo"
+          />}
+          <svg
+            ref={svgRef}
+            className="cad-canvas"
+            viewBox={`0 0 ${model.canvasWidth} ${model.canvasHeight}`}
+            style={{ cursor }}
+            onClick={handleCanvasClick}
+            onDoubleClick={finishPath}
+            aria-label="Prancheta CAD 2D"
+          >
             <defs><pattern id="cad-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor" strokeWidth="0.45" /></pattern></defs>
             <rect width={model.canvasWidth} height={model.canvasHeight} className="cad-grid" />
             {model.paths.map((path) => <g key={path.id}>
               <path d={cadPathSvgData(path)} className={`cad-path ${path.role.toLowerCase()} ${selectedPathId === path.id ? "selected" : ""}`} />
-              <path d={cadPathSvgData(path)} className="cad-path-hit" onClick={(event) => { event.stopPropagation(); setSelectedPathId(path.id); setSelectedDepthId(null); setTool("SELECT"); }} />
+              <path d={cadPathSvgData(path)} className="cad-path-hit" onClick={(event) => {
+                event.stopPropagation();
+                setSelectedPathId(path.id);
+                setSelectedDepthId(null);
+                setTool("SELECT");
+              }} />
             </g>)}
-            {draftPoints.length > 0 && <path d={cadPathSvgData({ points: draftPoints, curve: draftCurve, closed: draftClosed })} className="cad-path draft" />}
-            {model.depthMarkers.map((marker) => <g key={marker.id} className={selectedDepthId === marker.id ? "cad-depth selected" : "cad-depth"} onClick={(event) => { event.stopPropagation(); setSelectedDepthId(marker.id); setSelectedPathId(null); setTool("SELECT"); }}>
-              <circle cx={marker.point.x} cy={marker.point.y} r="6" /><path d={`M ${marker.point.x - 10} ${marker.point.y} H ${marker.point.x + 10} M ${marker.point.x} ${marker.point.y - 10} V ${marker.point.y + 10}`} />
+            {draftPoints.length > 0 && <path
+              d={cadPathSvgData({ points: draftPoints, curve: draftCurve, closed: draftClosed })}
+              className="cad-path draft"
+            />}
+            {model.depthMarkers.map((marker) => <g
+              key={marker.id}
+              className={selectedDepthId === marker.id ? "cad-depth selected" : "cad-depth"}
+              onClick={(event) => {
+                event.stopPropagation();
+                setSelectedDepthId(marker.id);
+                setSelectedPathId(null);
+                setTool("SELECT");
+              }}
+            >
+              <circle cx={marker.point.x} cy={marker.point.y} r="6" />
+              <path d={`M ${marker.point.x - 10} ${marker.point.y} H ${marker.point.x + 10} M ${marker.point.x} ${marker.point.y - 10} V ${marker.point.y + 10}`} />
               <text x={marker.point.x + 12} y={marker.point.y - 8}>{marker.label} · -{(marker.depthMm / 1000).toFixed(2)} m</text>
             </g>)}
-            {model.calibration && <g className="cad-calibration"><line x1={model.calibration.pointA.x} y1={model.calibration.pointA.y} x2={model.calibration.pointB.x} y2={model.calibration.pointB.y} /><circle cx={model.calibration.pointA.x} cy={model.calibration.pointA.y} r="5" /><circle cx={model.calibration.pointB.x} cy={model.calibration.pointB.y} r="5" /><text x={(model.calibration.pointA.x + model.calibration.pointB.x) / 2} y={(model.calibration.pointA.y + model.calibration.pointB.y) / 2 - 8}>{model.calibration.knownDistanceMm.toFixed(0)} mm</text></g>}
+            {model.calibration && <g className="cad-calibration">
+              <line x1={model.calibration.pointA.x} y1={model.calibration.pointA.y} x2={model.calibration.pointB.x} y2={model.calibration.pointB.y} />
+              <circle cx={model.calibration.pointA.x} cy={model.calibration.pointA.y} r="5" />
+              <circle cx={model.calibration.pointB.x} cy={model.calibration.pointB.y} r="5" />
+              <text x={(model.calibration.pointA.x + model.calibration.pointB.x) / 2} y={(model.calibration.pointA.y + model.calibration.pointB.y) / 2 - 8}>{model.calibration.knownDistanceMm.toFixed(0)} mm</text>
+            </g>}
             {calibrationPoints.map((calibrationPoint, index) => <circle key={index} className="cad-calibration-point" cx={calibrationPoint.x} cy={calibrationPoint.y} r="6" />)}
-            {selectedPath?.points.map((pathPoint, index) => <circle key={index} className="cad-node" cx={pathPoint.x} cy={pathPoint.y} r="7" onPointerDown={(event) => handlePointPointerDown(event, selectedPath.id, index)} onPointerMove={handlePointPointerMove} onPointerUp={handlePointPointerUp} />)}
+            {selectedPath?.points.map((pathPoint, index) => <circle
+              key={index}
+              className="cad-node"
+              cx={pathPoint.x}
+              cy={pathPoint.y}
+              r="7"
+              onPointerDown={(event) => handlePointPointerDown(event, selectedPath.id, index)}
+              onPointerMove={handlePointPointerMove}
+              onPointerUp={handlePointPointerUp}
+            />)}
           </svg>
         </div>
       </div>
