@@ -38,6 +38,22 @@ export type {
   EngineeringCheck,
   StructuralDesignProfile
 } from "./engineering.js";
+export {
+  buildPoolGeometryModel,
+  groundwaterHeadAboveZoneSlabBottomMm,
+  maximumPoolDepthMm,
+  nextDepthZoneKind,
+  normalizePoolDepthZones,
+  poolWaterVolumeM3
+} from "./geometry.js";
+export type {
+  GeometricWallKind,
+  GeometricWallPanel,
+  GeometricWallSide,
+  NormalizedDepthZone,
+  PoolGeometryModel,
+  PoolStepTransition
+} from "./geometry.js";
 export { calculatePoolLoadCases } from "./load-cases.js";
 export type { PoolLoadCasesInput, PoolLoadCasesResult } from "./load-cases.js";
 export { designMasonryPanel } from "./masonry-design.js";
@@ -110,6 +126,8 @@ export type {
   Phase1MasonryResult,
   Phase1DesignInput,
   Phase1DesignResult,
+  Phase1SlabZoneResult,
+  Phase1WallPanelResult,
   Phase1WallResult
 } from "./phase1.js";
 export { DEFAULT_MASONRY_SPECIFICATION } from "./phase1.js";
@@ -132,7 +150,10 @@ export type {
   CalculationError,
   CalculationOutcome,
   HydrostaticResult,
+  HydrostaticZoneResult,
   NormativeProfile,
+  PoolDepthZoneInput,
+  PoolDepthZoneKind,
   PoolGeometryInput,
   TraceStep,
   WallPanelError,

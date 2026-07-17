@@ -8,11 +8,16 @@ import {
   validateConcreteBlockStrength,
   type ConcreteBlockClass
 } from "./block-standard.js";
-import type {
-  EngineeringCheck,
-  StructuralDesignProfile
-} from "./engineering.js";
+import type { EngineeringCheck, StructuralDesignProfile } from "./engineering.js";
 import { validateStructuralProfile } from "./engineering.js";
+import {
+  buildPoolGeometryModel,
+  groundwaterHeadAboveZoneSlabBottomMm,
+  type GeometricWallKind,
+  type GeometricWallSide,
+  type NormalizedDepthZone,
+  type PoolGeometryModel
+} from "./geometry.js";
 import { calculateHydrostaticAction } from "./hydrostatic.js";
 import { calculatePoolLoadCases, type PoolLoadCasesResult } from "./load-cases.js";
 import { designMasonryPanel, type MasonryDesignResult } from "./masonry-design.js";
@@ -53,9 +58,7 @@ export interface Phase1DesignInput {
 
 export interface MasonrySpecificationInput {
   readonly blockFamilyId: string;
-  /** Classe declarada para o bloco. Opcional apenas para revisões legadas já salvas. */
   readonly blockClass?: ConcreteBlockClass;
-  /** fbk especificado para o lote, referido à área bruta. */
   readonly blockStrengthMPa: number;
   readonly verticalGroutSpacingMm: number;
   readonly bondBeamCourseSpacing: number;
@@ -85,20 +88,58 @@ export interface Phase1WallResult {
   readonly checks: readonly EngineeringCheck[];
 }
 
+export interface Phase1WallPanelResult extends Phase1WallResult {
+  readonly id: string;
+  readonly label: string;
+  readonly kind: GeometricWallKind;
+  readonly side: GeometricWallSide;
+  readonly lengthMm: number;
+  readonly heightMm: number;
+  readonly zoneId?: string;
+  readonly fromZoneId?: string;
+  readonly toZoneId?: string;
+}
+
+export interface Phase1SlabZoneResult {
+  readonly id: string;
+  readonly label: string;
+  readonly zone: NormalizedDepthZone;
+  readonly groundwaterHeadAboveSlabBottomMm: number;
+  readonly loadCases: PoolLoadCasesResult;
+  readonly design: SlabDesignResult;
+  readonly checks: readonly EngineeringCheck[];
+}
+
 export interface Phase1DesignResult {
-  readonly engineVersion: "phase1-1.3.0";
+  readonly engineVersion: "phase1-2.0.0";
   readonly profileId: string;
   readonly profileVersion: string;
+  readonly geometryModel: PoolGeometryModel;
   readonly hydrostatic: HydrostaticResult;
   readonly loadCases: PoolLoadCasesResult;
+  /** Resumos governantes mantidos para compatibilidade com revisões e exportações anteriores. */
   readonly longWall: Phase1WallResult;
   readonly shortWall: Phase1WallResult;
   readonly slab: SlabDesignResult;
+  readonly wallPanels: readonly Phase1WallPanelResult[];
+  readonly slabZones: readonly Phase1SlabZoneResult[];
   readonly masonry?: Phase1MasonryResult;
   readonly checks: readonly EngineeringCheck[];
   readonly overallStatus: "PASS" | "FAIL" | "REQUIRES_REVIEW";
   readonly warnings: readonly string[];
 }
+
+const wallDemand = (wall: Phase1WallResult): number => Math.max(
+  wall.actions.designMomentParallelKNMPerM,
+  wall.actions.designMomentPerpendicularKNMPerM
+);
+
+const slabDemand = (slab: SlabDesignResult): number => Math.max(
+  slab.bottomX.adoptedSteelMm2PerM,
+  slab.bottomY.adoptedSteelMm2PerM,
+  slab.topX.adoptedSteelMm2PerM,
+  slab.topY.adoptedSteelMm2PerM
+);
 
 export function runPhase1Design(
   input: Phase1DesignInput,
@@ -119,37 +160,38 @@ export function runPhase1Design(
   if (!hydrostatic.ok) {
     throw new RangeError(hydrostatic.errors.map((error) => error.message).join(" "));
   }
+  const geometryModel = buildPoolGeometryModel(input.geometry);
+  const maximumDepthMm = geometryModel.maximumWaterDepthMm;
   const loadCasesBundle = calculatePoolLoadCases({
     internalLengthMm: input.geometry.internalLengthMm,
     internalWidthMm: input.geometry.internalWidthMm,
-    wallHeightMm: input.geometry.waterDepthMm,
+    wallHeightMm: maximumDepthMm,
     wallThicknessMm: input.geometry.wallThicknessMm,
     slabThicknessMm: input.geometry.slabThicknessMm,
-    waterDepthMm: input.geometry.waterDepthMm,
+    waterDepthMm: maximumDepthMm,
     groundwaterHeadAboveSlabBottomMm: input.groundwaterHeadAboveSlabBottomMm,
     imposedFloorLoadKPa: input.imposedFloorLoadKPa,
     masonryUnitWeightKNM3: input.masonryUnitWeightKNM3
   }, profile);
-  const wallBase = {
-    panelHeightMm: input.geometry.waterDepthMm,
-    wallThicknessMm: input.geometry.wallThicknessMm,
-    saturatedSoilUnitWeightKNM3: input.saturatedSoilUnitWeightKNM3,
-    soilFrictionAngleDegrees: input.soilFrictionAngleDegrees,
-    effectiveHeightFactor: input.effectiveWallHeightFactor,
-    ultimateLoadFactor: profile.actionFactor,
-    orthogonalityCoefficient: input.orthogonalityCoefficient
-  } as const;
-  const createWall = (panelLengthMm: number): Phase1WallResult => {
-    const actionsOutcome = calculateWallPanelActions(
-      { ...wallBase, panelLengthMm },
-      hydroProfile
-    );
+
+  const createWall = (panel: PoolGeometryModel["wallPanels"][number]): Phase1WallPanelResult => {
+    const effectiveHeightFactor = panel.kind === "STEP" ? 1 : input.effectiveWallHeightFactor;
+    const actionsOutcome = calculateWallPanelActions({
+      panelLengthMm: panel.lengthMm,
+      panelHeightMm: panel.heightMm,
+      wallThicknessMm: input.geometry.wallThicknessMm,
+      saturatedSoilUnitWeightKNM3: input.saturatedSoilUnitWeightKNM3,
+      soilFrictionAngleDegrees: input.soilFrictionAngleDegrees,
+      effectiveHeightFactor,
+      ultimateLoadFactor: profile.actionFactor,
+      orthogonalityCoefficient: input.orthogonalityCoefficient
+    }, hydroProfile);
     if (!actionsOutcome.ok) {
-      throw new RangeError(actionsOutcome.errors.map((error) => error.message).join(" "));
+      throw new RangeError(`${panel.label}: ${actionsOutcome.errors.map((error) => error.message).join(" ")}`);
     }
     const designBundle = designMasonryPanel({
-      panelLengthMm,
-      panelHeightMm: input.geometry.waterDepthMm,
+      panelLengthMm: panel.lengthMm,
+      panelHeightMm: panel.heightMm,
       wallThicknessMm: input.geometry.wallThicknessMm,
       reinforcementCoverMm: input.reinforcementCoverMm,
       barDiameterMm: input.wallBarDiameterMm,
@@ -159,56 +201,122 @@ export function runPhase1Design(
       forceReinforcedDesign: true,
       panelActions: actionsOutcome.value
     }, profile);
+    const checks = designBundle.checks.map((check) => ({
+      ...check,
+      id: `${panel.id}-${check.id}`,
+      message: `${panel.label}: ${check.message}`
+    }));
+    if (panel.kind === "STEP") {
+      checks.push({
+        id: `${panel.id}-support-model`,
+        status: "REQUIRES_REVIEW",
+        demand: panel.heightMm,
+        resistance: panel.lengthMm,
+        unit: "mm",
+        message: `${panel.label}: confirmar ligação monolítica, apoio das lajes e material sob a prainha.`
+      });
+    }
     return {
+      id: panel.id,
+      label: panel.label,
+      kind: panel.kind,
+      side: panel.side,
+      lengthMm: panel.lengthMm,
+      heightMm: panel.heightMm,
+      ...(panel.zoneId ? { zoneId: panel.zoneId } : {}),
+      ...(panel.fromZoneId ? { fromZoneId: panel.fromZoneId } : {}),
+      ...(panel.toZoneId ? { toZoneId: panel.toZoneId } : {}),
       actions: actionsOutcome.value,
       design: designBundle.value,
-      checks: designBundle.checks
+      checks
     };
   };
-  const longWall = createWall(
-    input.geometry.internalLengthMm + 2 * input.geometry.wallThicknessMm
+
+  const wallPanels = geometryModel.wallPanels.map(createWall);
+  const longCandidates = wallPanels.filter((wall) => wall.kind === "PERIMETER_LONG");
+  const endCandidates = wallPanels.filter((wall) => wall.kind === "PERIMETER_END");
+  const longWall = longCandidates.reduce((governing, wall) =>
+    wallDemand(wall) > wallDemand(governing) ? wall : governing
   );
-  const shortWall = createWall(
-    input.geometry.internalWidthMm + 2 * input.geometry.wallThicknessMm
+  const shortWall = endCandidates.reduce((governing, wall) =>
+    wallDemand(wall) > wallDemand(governing) ? wall : governing
   );
-  const shortSpanMm = Math.min(
-    input.geometry.internalLengthMm,
-    input.geometry.internalWidthMm
+
+  const slabZones: Phase1SlabZoneResult[] = geometryModel.zones.map((zone) => {
+    const groundwaterHead = groundwaterHeadAboveZoneSlabBottomMm(
+      input.geometry,
+      input.groundwaterHeadAboveSlabBottomMm,
+      zone.waterDepthMm
+    );
+    const zoneLoadCases = calculatePoolLoadCases({
+      internalLengthMm: zone.lengthMm,
+      internalWidthMm: input.geometry.internalWidthMm,
+      wallHeightMm: zone.waterDepthMm,
+      wallThicknessMm: input.geometry.wallThicknessMm,
+      slabThicknessMm: input.geometry.slabThicknessMm,
+      waterDepthMm: zone.waterDepthMm,
+      groundwaterHeadAboveSlabBottomMm: groundwaterHead,
+      imposedFloorLoadKPa: input.imposedFloorLoadKPa,
+      masonryUnitWeightKNM3: input.masonryUnitWeightKNM3
+    }, profile);
+    const shortSpanMm = Math.min(zone.lengthMm, input.geometry.internalWidthMm);
+    const trueLongSpanMm = Math.max(zone.lengthMm, input.geometry.internalWidthMm);
+    const tableLongSpanMm = Math.min(trueLongSpanMm, 2 * shortSpanMm);
+    const designBundle = designClampedPoolSlab({
+      shortSpanMm,
+      longSpanMm: tableLongSpanMm,
+      thicknessMm: input.geometry.slabThicknessMm,
+      reinforcementCoverMm: input.slabReinforcementCoverMm,
+      barDiameterMm: input.slabBarDiameterMm,
+      minimumSteelRatio: input.minimumSlabSteelRatio,
+      downwardDesignLoadKPa: zoneLoadCases.value.fullPoolDownwardDesignKPa,
+      upliftDesignLoadKPa: zoneLoadCases.value.emptyPoolNetUpliftDesignKPa
+    }, profile);
+    const checks = designBundle.checks.map((check) => ({
+      ...check,
+      id: `${zone.id}-${check.id}`,
+      message: `${zone.label}: ${check.message}`
+    }));
+    if (tableLongSpanMm !== trueLongSpanMm) {
+      checks.push({
+        id: `${zone.id}-slab-aspect-ratio`,
+        status: "REQUIRES_REVIEW",
+        demand: shortSpanMm / trueLongSpanMm,
+        resistance: 0.5,
+        unit: "ratio",
+        message: `${zone.label}: relação de vãos inferior a 0,5; coeficientes limitados ao bordo da tabela acadêmica e laje unidirecional deve ser revisada.`
+      });
+    }
+    return {
+      id: `slab-${zone.id}`,
+      label: `Laje — ${zone.label}`,
+      zone,
+      groundwaterHeadAboveSlabBottomMm: groundwaterHead,
+      loadCases: zoneLoadCases.value,
+      design: designBundle.value,
+      checks
+    };
+  });
+  const governingSlabZone = slabZones.reduce((governing, candidate) =>
+    slabDemand(candidate.design) > slabDemand(governing.design) ? candidate : governing
   );
-  const longSpanMm = Math.max(
-    input.geometry.internalLengthMm,
-    input.geometry.internalWidthMm
-  );
-  const slabBundle = designClampedPoolSlab({
-    shortSpanMm,
-    longSpanMm,
-    thicknessMm: input.geometry.slabThicknessMm,
-    reinforcementCoverMm: input.slabReinforcementCoverMm,
-    barDiameterMm: input.slabBarDiameterMm,
-    minimumSteelRatio: input.minimumSlabSteelRatio,
-    downwardDesignLoadKPa: loadCasesBundle.value.fullPoolDownwardDesignKPa,
-    upliftDesignLoadKPa: loadCasesBundle.value.emptyPoolNetUpliftDesignKPa
-  }, profile);
+  const slab = governingSlabZone.design;
+
   const masonrySpecification = input.masonry ?? DEFAULT_MASONRY_SPECIFICATION;
   const family = DEFAULT_BLOCK_FAMILIES.find(
     (candidate) => candidate.id === masonrySpecification.blockFamilyId
   );
-  if (!family) {
-    throw new RangeError(`Familia de blocos desconhecida: ${masonrySpecification.blockFamilyId}.`);
-  }
+  if (!family) throw new RangeError(`Familia de blocos desconhecida: ${masonrySpecification.blockFamilyId}.`);
   if (!Number.isFinite(masonrySpecification.blockStrengthMPa) || masonrySpecification.blockStrengthMPa < 3) {
     throw new RangeError("fbk do bloco deve ser finito e igual ou superior a 3 MPa.");
   }
   const blockClass = masonrySpecification.blockClass ??
     inferLegacyConcreteBlockClass(masonrySpecification.blockStrengthMPa);
-  const strengthValidation = validateConcreteBlockStrength(
-    blockClass,
-    masonrySpecification.blockStrengthMPa
-  );
+  const strengthValidation = validateConcreteBlockStrength(blockClass, masonrySpecification.blockStrengthMPa);
   const modulationBundle = modulatePoolPerimeter({
     internalLengthMm: input.geometry.internalLengthMm,
     internalWidthMm: input.geometry.internalWidthMm,
-    wallHeightMm: input.geometry.waterDepthMm,
+    wallHeightMm: maximumDepthMm,
     wallThicknessMm: input.geometry.wallThicknessMm,
     verticalGroutSpacingMm: masonrySpecification.verticalGroutSpacingMm,
     bondBeamCourseSpacing: masonrySpecification.bondBeamCourseSpacing
@@ -291,11 +399,7 @@ export function runPhase1Design(
     unit: "mm",
     message: `Medir o lote: largura ±${NBR_6136_1_2026_DIMENSIONAL_TOLERANCES.widthPlusMinusMm} mm, altura/comprimento ±${NBR_6136_1_2026_DIMENSIONAL_TOLERANCES.heightPlusMinusMm} mm e paredes com tolerância negativa de ${NBR_6136_1_2026_DIMENSIONAL_TOLERANCES.wallThicknessNegativeMm} mm.`
   };
-  const webRequirement = findBlockWebRequirement(
-    blockClass,
-    family.nominalWidthMm,
-    fullActualLengthMm
-  );
+  const webRequirement = findBlockWebRequirement(blockClass, family.nominalWidthMm, fullActualLengthMm);
   const webGeometryCheck: EngineeringCheck = {
     id: "nbr-6136-1-2026-web-geometry",
     status: "REQUIRES_REVIEW",
@@ -347,8 +451,7 @@ export function runPhase1Design(
     message: "Confirmar no recebimento: identificação do lote, classe, fbk, dimensões, absorção, inspeção e resultados de ensaio."
   };
   const requiredVerticalBarSpacingMm = Math.min(
-    longWall.design.perpendicular.layout.spacingMm,
-    shortWall.design.perpendicular.layout.spacingMm
+    ...wallPanels.map((wall) => wall.design.perpendicular.layout.spacingMm)
   );
   const groutSpacingCheck: EngineeringCheck = {
     id: "grout-spacing-covers-vertical-bars",
@@ -358,9 +461,20 @@ export function runPhase1Design(
     unit: "mm",
     message: "Espaçamento das células grauteadas atende todas as barras verticais calculadas."
   };
+  const multiDepthModulationCheck: EngineeringCheck = {
+    id: "multi-depth-masonry-modulation",
+    status: geometryModel.hasMultipleDepths ? "REQUIRES_REVIEW" : "PASS",
+    demand: geometryModel.zones.length,
+    resistance: 1,
+    unit: "zones",
+    message: geometryModel.hasMultipleDepths
+      ? "Paginação por zonas e encontros com degraus deve ser conferida individualmente; o resumo perimetral usa a maior altura."
+      : "Piscina com profundidade única para a modulação perimetral."
+  };
   const masonryChecks = [
     ...modulationBundle.checks,
     groutSpacingCheck,
+    multiDepthModulationCheck,
     strengthClassCheck,
     catalogStrengthCheck,
     belowGradeClassCheck,
@@ -376,9 +490,8 @@ export function runPhase1Design(
   ];
   const checks = [
     ...loadCasesBundle.checks,
-    ...longWall.checks,
-    ...shortWall.checks,
-    ...slabBundle.checks,
+    ...wallPanels.flatMap((wall) => wall.checks),
+    ...slabZones.flatMap((zone) => zone.checks),
     ...masonryChecks
   ];
   const overallStatus = checks.some((check) => check.governing !== false && check.status === "FAIL")
@@ -388,14 +501,17 @@ export function runPhase1Design(
       : "PASS";
 
   return {
-    engineVersion: "phase1-1.3.0",
+    engineVersion: "phase1-2.0.0",
     profileId: profile.id,
     profileVersion: profile.version,
+    geometryModel,
     hydrostatic: hydrostatic.value,
     loadCases: loadCasesBundle.value,
     longWall,
     shortWall,
-    slab: slabBundle.value,
+    slab,
+    wallPanels,
+    slabZones,
     masonry: {
       family,
       blockStrengthMPa: masonrySpecification.blockStrengthMPa,
@@ -405,6 +521,7 @@ export function runPhase1Design(
       trace: modulationBundle.trace,
       warnings: [
         ...modulationBundle.warnings,
+        ...(geometryModel.hasMultipleDepths ? ["Modulação vertical segmentada por profundidade exige revisão dos encontros e degraus."] : []),
         "Dimensões internas, mísulas e inspeção visual dependem de medição e documentação do lote fornecido."
       ]
     },
@@ -412,8 +529,9 @@ export function runPhase1Design(
     overallStatus,
     warnings: [
       ...loadCasesBundle.warnings,
-      ...slabBundle.warnings,
+      ...slabZones.flatMap((zone) => zone.design.warnings),
       ...modulationBundle.warnings,
+      ...(geometryModel.hasMultipleDepths ? ["Modelo geométrico com múltiplas profundidades e paredes individualizadas ativo."] : []),
       "Resultado de Fase 1 para pre-dimensionamento; revisao de engenheiro permanece obrigatoria."
     ]
   };

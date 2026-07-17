@@ -1,9 +1,25 @@
+export type PoolDepthZoneKind = "SHALLOW" | "INTERMEDIATE" | "MAIN";
+
+export interface PoolDepthZoneInput {
+  readonly id: string;
+  readonly label: string;
+  readonly kind: PoolDepthZoneKind;
+  readonly lengthMm: number;
+  readonly waterDepthMm: number;
+}
+
 export interface PoolGeometryInput {
   readonly internalLengthMm: number;
   readonly internalWidthMm: number;
+  /**
+   * Profundidade máxima, mantida para compatibilidade com revisões legadas.
+   * Quando depthZones é informado, deve coincidir com a maior profundidade.
+   */
   readonly waterDepthMm: number;
   readonly wallThicknessMm: number;
   readonly slabThicknessMm: number;
+  /** Zonas sequenciais no sentido do comprimento interno da piscina. */
+  readonly depthZones?: readonly PoolDepthZoneInput[];
 }
 
 export interface NormativeProfile {
@@ -23,6 +39,16 @@ export interface TraceStep {
   readonly unit: string;
 }
 
+export interface HydrostaticZoneResult {
+  readonly id: string;
+  readonly label: string;
+  readonly kind: PoolDepthZoneKind;
+  readonly lengthMm: number;
+  readonly waterDepthMm: number;
+  readonly volumeM3: number;
+  readonly floorPressureKPa: number;
+}
+
 export interface HydrostaticResult {
   readonly waterVolumeM3: number;
   readonly approximateCapacityLitres: number;
@@ -30,13 +56,15 @@ export interface HydrostaticResult {
   readonly wallResultantKNPerM: number;
   readonly wallBaseMomentKNMPerM: number;
   readonly floorPressureKPa: number;
+  readonly maximumWaterDepthMm: number;
+  readonly zones: readonly HydrostaticZoneResult[];
   readonly trace: readonly TraceStep[];
   readonly warnings: readonly string[];
 }
 
 export interface CalculationError {
-  readonly field: keyof PoolGeometryInput | "profile";
-  readonly code: "NOT_FINITE" | "OUT_OF_RANGE" | "INVALID_PROFILE";
+  readonly field: keyof PoolGeometryInput | `depthZones.${number}` | "profile";
+  readonly code: "NOT_FINITE" | "OUT_OF_RANGE" | "INVALID_PROFILE" | "INVALID_GEOMETRY";
   readonly message: string;
 }
 
@@ -71,7 +99,7 @@ export interface WallPanelResult {
 
 export interface WallPanelError {
   readonly field: keyof WallPanelInput | "profile" | "heightToLengthRatio";
-  readonly code: "NOT_FINITE" | "OUT_OF_RANGE" | "INVALID_PROFILE" | "UNSUPPORTED_RATIO";
+  readonly code: "NOT_FINITE" | "OUT_OF_RANGE" | "INVALID_PROFILE" | "INVALID_GEOMETRY" | "UNSUPPORTED_RATIO";
   readonly message: string;
 }
 

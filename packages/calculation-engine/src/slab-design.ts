@@ -48,6 +48,7 @@ export interface SlabDesignResult {
   readonly bottomY: ReinforcedConcreteSectionResult;
   readonly topX: ReinforcedConcreteSectionResult;
   readonly topY: ReinforcedConcreteSectionResult;
+  readonly warnings: readonly string[];
 }
 
 const CLAMPED_PLATE_TABLE: readonly PlateCoefficients[] = [
@@ -201,6 +202,12 @@ export function designClampedPoolSlab(
     status: "REQUIRES_REVIEW",
     message: "Flechas e fissuracao da laje dependem de combinacoes e limites normativos ainda nao licenciados."
   });
+  const warnings = [
+    "Coeficientes de placa digitalizados da Figura 4 do PDF e interpolados linearmente.",
+    "A expressao KZ = 1 - 0,4*KX corrige por inferencia a inconsistencia tipografica da Equacao 27.",
+    "A taxa minima de aco deve ser fornecida por perfil ou responsavel tecnico.",
+    ...(profile.status === "draft" ? ["Perfil estrutural academico ainda nao revisado."] : [])
+  ];
 
   return {
     value: {
@@ -210,7 +217,8 @@ export function designClampedPoolSlab(
       bottomX,
       bottomY,
       topX,
-      topY
+      topY,
+      warnings
     },
     checks,
     trace: [{
@@ -225,11 +233,6 @@ export function designClampedPoolSlab(
       result: downwardMomentsKNMPerM.positiveX,
       unit: "kN.m/m"
     }],
-    warnings: [
-      "Coeficientes de placa digitalizados da Figura 4 do PDF e interpolados linearmente.",
-      "A expressao KZ = 1 - 0,4*KX corrige por inferencia a inconsistencia tipografica da Equacao 27.",
-      "A taxa minima de aco deve ser fornecida por perfil ou responsavel tecnico.",
-      ...(profile.status === "draft" ? ["Perfil estrutural academico ainda nao revisado."] : [])
-    ]
+    warnings
   };
 }

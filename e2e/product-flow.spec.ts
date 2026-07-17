@@ -3,6 +3,14 @@ import { expect, test, type Page } from "@playwright/test";
 
 const unexpectedErrors = new WeakMap<Page, string[]>();
 
+async function createProject(page: Page, name: string, location = "João Pessoa - PB") {
+  await page.getByRole("button", { name: "Novo projeto" }).click();
+  const navigator = page.locator("aside.navigator");
+  await navigator.getByLabel("Nome").fill(name);
+  await navigator.getByLabel("Local").fill(location);
+  await navigator.getByRole("button", { name: "Criar projeto" }).click();
+}
+
 test.beforeEach(async ({ page }) => {
   const errors: string[] = [];
   unexpectedErrors.set(page, errors);
@@ -26,10 +34,7 @@ test.afterEach(async ({ page }) => {
 });
 
 test("cria projeto, calcula, persiste R1 e exporta a memória", async ({ page }) => {
-  await page.getByRole("button", { name: "Novo projeto" }).click();
-  await page.getByLabel("Nome").fill("Piscina E2E Alfa");
-  await page.getByLabel("Local").fill("João Pessoa - PB");
-  await page.getByRole("button", { name: "Criar projeto" }).click();
+  await createProject(page, "Piscina E2E Alfa");
 
   await expect(page.getByRole("heading", { name: "Piscina E2E Alfa" })).toBeVisible();
   await page.getByRole("button", { name: "Calcular e salvar revisão" }).click();
@@ -52,8 +57,8 @@ test("cria projeto, calcula, persiste R1 e exporta a memória", async ({ page })
   const drawingPath = await drawingDownload.path();
   expect(drawingPath).not.toBeNull();
   const drawing = await readFile(drawingPath!, "utf8");
-  expect(drawing).toContain("PLANTA DE FORMAS E ARMADURAS");
-  expect(drawing).toContain("CORTE A—A");
+  expect(drawing).toContain("PLANTA DE FORMAS — ZONAS DE PROFUNDIDADE");
+  expect(drawing).toContain("CORTE LONGITUDINAL A—A");
   expect(drawing).toContain("R1");
 
   const downloadPromise = page.waitForEvent("download");
@@ -65,6 +70,7 @@ test("cria projeto, calcula, persiste R1 e exporta a memória", async ({ page })
   const html = await readFile(downloadedPath!, "utf8");
   expect(html).toContain("Piscina E2E Alfa");
   expect(html).toContain("POOLSTRUCT · MEMÓRIA DE CÁLCULO");
+  expect(html).toContain("Zonas de profundidade");
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.getByRole("navigation").getByRole("button", { name: /^Piscina E2E Alfa / }).click();
@@ -72,11 +78,32 @@ test("cria projeto, calcula, persiste R1 e exporta a memória", async ({ page })
   await expect(page.getByRole("heading", { name: "Resultado estrutural" })).toBeVisible();
 });
 
+test("modela prainha, fundo principal e parede de degrau", async ({ page }) => {
+  await createProject(page, "Piscina com Prainha");
+  await page.getByRole("button", { name: "Adicionar zona" }).click();
+
+  const depthInputs = page.getByRole("spinbutton", { name: /^Profundidade d'água mm$/ });
+  const lengthInputs = page.getByRole("spinbutton", { name: /^Comprimento mm$/ });
+  await expect(depthInputs).toHaveCount(2);
+  await expect(lengthInputs).toHaveCount(2);
+  await depthInputs.nth(0).fill("400");
+  await depthInputs.nth(1).fill("1600");
+  await lengthInputs.nth(0).fill("1600");
+  await lengthInputs.nth(1).fill("6400");
+  await page.getByRole("button", { name: "Calcular e salvar revisão" }).click();
+
+  const results = page.locator(".results-panel");
+  await expect(results.getByRole("heading", { name: "Zonas de profundidade" })).toBeVisible();
+  await expect(results.getByText("Prainha", { exact: true })).toBeVisible();
+  await expect(results.getByText(/degrau/i).first()).toBeVisible();
+  await expect(results.getByText("2 zona(s)", { exact: true })).toBeVisible();
+  const panelMetric = results.locator(".metrics article").filter({ hasText: "Paredes calculadas" });
+  await expect(panelMetric).toContainText("7");
+});
+
 test("mantém projetos de navegação separados e permite arquivamento", async ({ page }) => {
   for (const name of ["Piscina Norte", "Piscina Sul"]) {
-    await page.getByRole("button", { name: "Novo projeto" }).click();
-    await page.getByLabel("Nome").fill(name);
-    await page.getByRole("button", { name: "Criar projeto" }).click();
+    await createProject(page, name);
   }
 
   await page.getByRole("navigation").getByRole("button", { name: /^Piscina Norte / }).click();
@@ -87,18 +114,17 @@ test("mantém projetos de navegação separados e permite arquivamento", async (
 });
 
 test("correlaciona falha de cálculo sem vazar mensagem interna", async ({ page }) => {
-  await page.getByRole("button", { name: "Novo projeto" }).click();
-  await page.getByLabel("Nome").fill("Piscina Inválida");
-  await page.getByRole("button", { name: "Criar projeto" }).click();
-  await page.getByRole("spinbutton", { name: /Lâmina d'água/ }).fill("0");
+  await createProject(page, "Piscina Inválida");
+  await page.getByText("Parâmetros de detalhamento", { exact: true }).click();
+  await page.getByRole("spinbutton", { name: /Fator de altura efetiva/ }).fill("0");
   await page.getByRole("button", { name: "Calcular e salvar revisão" }).click();
 
   const alert = page.getByRole("alert");
   await expect(alert).toContainText("Não foi possível executar o cálculo.");
   await expect(alert).toContainText(/Código do incidente: [0-9a-f-]{36}/);
-  await expect(alert).not.toContainText("waterDepthMm");
+  await expect(alert).not.toContainText("effectiveHeightFactor");
 
   const events = await page.evaluate(() => localStorage.getItem("poolstruct:operational-events"));
   expect(events).toContain("calculation_or_save_failed");
-  expect(events).not.toContain("waterDepthMm");
+  expect(events).not.toContain("effectiveHeightFactor");
 });

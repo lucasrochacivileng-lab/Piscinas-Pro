@@ -42,7 +42,6 @@ const silva2022WallCase: Phase1DesignInput = {
   groundwaterHeadAboveSlabBottomMm: 0,
   imposedFloorLoadKPa: 2.5,
   masonryUnitWeightKNM3: 14,
-  // Parede engastada na base e livre no topo: hef = 2h.
   effectiveWallHeightFactor: 2,
   orthogonalityCoefficient: 0.5,
   reinforcementCoverMm: 50,
@@ -74,13 +73,14 @@ describe("regressões integradas da Fase 3", () => {
     expect(result.hydrostatic.approximateCapacityLitres).toBe(44_800);
     expect(result.hydrostatic.maximumWallPressureKPa).toBe(14);
     expect(result.hydrostatic.wallBaseMomentKNMPerM).toBeCloseTo(4.5733333333, 8);
-    expect(result.engineVersion).toBe("phase1-1.3.0");
+    expect(result.engineVersion).toBe("phase1-2.0.0");
+    expect(result.wallPanels).toHaveLength(4);
+    expect(result.slabZones).toHaveLength(1);
   });
 
   it("reproduz o caso de parede 5,28 x 1,60 m de Silva (2022)", () => {
     const result = runPhase1Design(silva2022WallCase, SILVA_2022_PHASE1_PROFILE);
     const wall = result.longWall;
-
     expect(wall.actions.activeEarthPressureCoefficient).toBeCloseTo(1 / 3, 8);
     expect(wall.actions.maximumWaterPressureKPa).toBe(16);
     expect(wall.actions.governingCase).toBe("FULL_POOL_WATER");
@@ -92,6 +92,31 @@ describe("regressões integradas da Fase 3", () => {
     expect(wall.actions.designMomentPerpendicularKNMPerM).toBeCloseTo(6.75569664, 8);
     expect(wall.design.parallel.requiredSteelByMomentMm2PerM).toBeCloseTo(363.46438063, 6);
     expect(wall.design.perpendicular.requiredSteelByMomentMm2PerM).toBeCloseTo(181.73219032, 6);
+  });
+
+  it("calcula prainha, fundo profundo, degrau e paredes individualizadas", () => {
+    const result = runPhase1Design({
+      ...baseline,
+      geometry: {
+        ...baseline.geometry,
+        waterDepthMm: 1600,
+        depthZones: [
+          { id: "beach", label: "Prainha", kind: "SHALLOW", lengthMm: 1600, waterDepthMm: 400 },
+          { id: "middle", label: "Intermediária", kind: "INTERMEDIATE", lengthMm: 1800, waterDepthMm: 900 },
+          { id: "main", label: "Fundo principal", kind: "MAIN", lengthMm: 4600, waterDepthMm: 1600 }
+        ]
+      }
+    }, SILVA_2022_PHASE1_PROFILE);
+
+    expect(result.geometryModel.zones).toHaveLength(3);
+    expect(result.geometryModel.transitions).toHaveLength(2);
+    expect(result.wallPanels).toHaveLength(10);
+    expect(result.wallPanels.filter((wall) => wall.kind === "STEP")).toHaveLength(2);
+    expect(result.slabZones).toHaveLength(3);
+    expect(result.hydrostatic.waterVolumeM3).toBeCloseTo(38.48, 8);
+    expect(result.hydrostatic.maximumWaterDepthMm).toBe(1600);
+    expect(result.slabZones[0]?.groundwaterHeadAboveSlabBottomMm).toBe(0);
+    expect(result.wallPanels.every((wall) => wall.id.trim() !== "")).toBe(true);
   });
 
   it("é determinístico para entradas e perfil idênticos", () => {

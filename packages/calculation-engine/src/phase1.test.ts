@@ -31,7 +31,7 @@ describe("runPhase1Design", () => {
   it("executa o fluxo completo da Fase 1 para piscina 8 x 4 m", () => {
     const result = runPhase1Design(input, SILVA_2022_PHASE1_PROFILE);
 
-    expect(result.engineVersion).toBe("phase1-1.3.0");
+    expect(result.engineVersion).toBe("phase1-2.0.0");
     expect(result.hydrostatic.waterVolumeM3).toBeCloseTo(44.8);
     expect(result.longWall.actions.analysisMethod).toBe("VERTICAL_CANTILEVER");
     expect(result.shortWall.actions.analysisMethod).toBe("TWO_WAY_TABLE");
