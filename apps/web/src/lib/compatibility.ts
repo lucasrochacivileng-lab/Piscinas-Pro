@@ -1,5 +1,6 @@
 import {
   createEmptyCadGeometryDocument,
+  normalizeCadGeometryDocument,
   type IntegratedDesignInput,
   type IntegratedDesignResult,
   type Phase1DesignResult,
@@ -93,6 +94,7 @@ export function normalizeIntegratedDesignInput(value: unknown): IntegratedDesign
     DEFAULT_DESIGN_INPUT.geometry.slabThicknessMm
   );
   const geotechnicalCandidate = candidate.geotechnical ?? {};
+  const cadGeometry = normalizeCadGeometryDocument(candidate.cadGeometry) ?? createEmptyCadGeometryDocument();
 
   return {
     ...DEFAULT_DESIGN_INPUT,
@@ -100,7 +102,7 @@ export function normalizeIntegratedDesignInput(value: unknown): IntegratedDesign
     structuralProfileId: typeof candidate.structuralProfileId === "string" && candidate.structuralProfileId.trim() !== ""
       ? candidate.structuralProfileId
       : DEFAULT_DESIGN_INPUT.structuralProfileId,
-    cadGeometry: candidate.cadGeometry ?? createEmptyCadGeometryDocument(),
+    cadGeometry,
     geometry: {
       ...DEFAULT_DESIGN_INPUT.geometry,
       ...geometryCandidate,
