@@ -1,6 +1,7 @@
 import {
   createEmptyCadGeometryDocument,
   runIntegratedDesign,
+  type CadDepthPosition,
   type CadGeometryDocument,
   type IntegratedDesignInput,
   type PoolDepthZoneInput
@@ -16,7 +17,11 @@ import { MasonryPanel } from "./components/MasonryPanel";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ResultDashboard } from "./components/ResultDashboard";
 import { RevisionHistory } from "./components/RevisionHistory";
-import { loadCadDraft } from "./lib/cad";
+import {
+  clearCadDraftConflict,
+  loadCadDraft,
+  loadCadDraftConflict
+} from "./lib/cad";
 import {
   isIntegratedDesignResult,
   normalizeIntegratedDesignInput,
@@ -33,6 +38,18 @@ interface ErrorNotice {
   readonly correlationId: string;
 }
 
+interface CadZoneDepthValue {
+  readonly zoneId: string;
+  readonly position: CadDepthPosition;
+  readonly depthMm: number;
+}
+
+interface CadEnvelopeApplication {
+  readonly lengthMm: number;
+  readonly widthMm: number;
+  readonly zoneDepths: readonly CadZoneDepthValue[];
+}
+
 const EMPTY_CAD = createEmptyCadGeometryDocument();
 
 const zoneDepth = (zone: PoolDepthZoneInput): number => Math.max(
@@ -40,6 +57,31 @@ const zoneDepth = (zone: PoolDepthZoneInput): number => Math.max(
   zone.startWaterDepthMm ?? zone.waterDepthMm,
   zone.endWaterDepthMm ?? zone.waterDepthMm
 );
+
+const applyDepthAssignments = (
+  zone: PoolDepthZoneInput,
+  assignments: readonly CadZoneDepthValue[]
+): PoolDepthZoneInput => {
+  let startWaterDepthMm = zone.startWaterDepthMm ?? zone.waterDepthMm;
+  let endWaterDepthMm = zone.endWaterDepthMm ?? zone.waterDepthMm;
+  for (const assignment of assignments) {
+    if (assignment.position === "UNIFORM") {
+      startWaterDepthMm = assignment.depthMm;
+      endWaterDepthMm = assignment.depthMm;
+    } else if (assignment.position === "START") {
+      startWaterDepthMm = assignment.depthMm;
+    } else {
+      endWaterDepthMm = assignment.depthMm;
+    }
+  }
+  return {
+    ...zone,
+    startWaterDepthMm,
+    endWaterDepthMm,
+    waterDepthMm: Math.max(startWaterDepthMm, endWaterDepthMm),
+    floorProfile: Math.abs(startWaterDepthMm - endWaterDepthMm) > 1 ? "SLOPED" : "HORIZONTAL"
+  };
+};
 
 export function App() {
   const { user, loading, localMode, signOut } = useAuth();
@@ -50,6 +92,7 @@ export function App() {
   const [activeRevision, setActiveRevision] = useState<RevisionRecord | null>(null);
   const [editorInput, setEditorInput] = useState<IntegratedDesignInput>(DEFAULT_DESIGN_INPUT);
   const [result, setResult] = useState<StoredDesignResult | null>(null);
+  const [cadDraftConflict, setCadDraftConflict] = useState<CadGeometryDocument | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ErrorNotice | null>(null);
 
@@ -82,7 +125,11 @@ export function App() {
       setRevisions(records);
       const latest = records[0];
       const normalized = normalizeIntegratedDesignInput(latest?.input ?? DEFAULT_DESIGN_INPUT);
-      const draft = loadCadDraft(user.id, project.id);
+      const draft = loadCadDraft(user.id, project.id, {
+        baseRevisionId: latest?.id ?? null,
+        baseInputHash: latest?.inputHash ?? null
+      });
+      setCadDraftConflict(loadCadDraftConflict(user.id, project.id));
       setActiveRevision(latest ?? null);
       setEditorInput({ ...normalized, cadGeometry: draft ?? normalized.cadGeometry ?? createEmptyCadGeometryDocument() });
       setResult(latest?.result ?? null);
@@ -111,6 +158,7 @@ export function App() {
         setRevisions([]);
         setActiveRevision(null);
         setResult(null);
+        setCadDraftConflict(null);
         setEditorInput(DEFAULT_DESIGN_INPUT);
       }
       await refreshProjects();
@@ -141,10 +189,21 @@ export function App() {
   }
 
   function openRevision(revision: RevisionRecord) {
-    const normalized = normalizeIntegratedDesignInput(revision.input);
     setActiveRevision(revision);
-    setEditorInput(normalized);
     setResult(revision.result);
+  }
+
+  function restoreCadConflict() {
+    if (!user || !activeProject || !cadDraftConflict) return;
+    setEditorInput((current) => ({ ...current, cadGeometry: cadDraftConflict }));
+    clearCadDraftConflict(user.id, activeProject.id);
+    setCadDraftConflict(null);
+  }
+
+  function discardCadConflict() {
+    if (!user || !activeProject) return;
+    clearCadDraftConflict(user.id, activeProject.id);
+    setCadDraftConflict(null);
   }
 
   const syncEditorInput = useCallback((input: IntegratedDesignInput) => setEditorInput(input), []);
@@ -152,10 +211,10 @@ export function App() {
     setEditorInput((current) => ({ ...current, cadGeometry }));
   }, []);
 
-  const applyCadEnvelope = useCallback((cad: { lengthMm: number; widthMm: number; maximumDepthMm?: number }) => {
+  const applyCadEnvelope = useCallback((cad: CadEnvelopeApplication) => {
     setEditorInput((current) => {
-      const targetLengthMm = Math.round(Math.max(cad.lengthMm, cad.widthMm));
-      const targetWidthMm = Math.round(Math.min(cad.lengthMm, cad.widthMm));
+      const targetLengthMm = Math.max(1, Math.round(cad.lengthMm));
+      const targetWidthMm = Math.max(1, Math.round(cad.widthMm));
       const existingZones = current.geometry.depthZones && current.geometry.depthZones.length > 0
         ? [...current.geometry.depthZones]
         : [{
@@ -168,21 +227,22 @@ export function App() {
         }];
       const total = existingZones.reduce((sum, zone) => sum + zone.lengthMm, 0);
       const factor = total > 0 ? targetLengthMm / total : 1;
-      const scaledZones = existingZones.map((zone) => ({ ...zone, lengthMm: Math.max(100, Math.round(zone.lengthMm * factor)) }));
+      const scaledZones = existingZones.map((zone) => ({
+        ...zone,
+        lengthMm: Math.max(1, Math.round(zone.lengthMm * factor))
+      }));
       const scaledTotal = scaledZones.reduce((sum, zone) => sum + zone.lengthMm, 0);
       const last = scaledZones.at(-1);
-      if (last) scaledZones[scaledZones.length - 1] = { ...last, lengthMm: Math.max(100, last.lengthMm + targetLengthMm - scaledTotal) };
-      if (scaledZones.length === 1 && cad.maximumDepthMm !== undefined) {
-        const only = scaledZones[0]!;
-        scaledZones[0] = {
-          ...only,
-          waterDepthMm: cad.maximumDepthMm,
-          startWaterDepthMm: cad.maximumDepthMm,
-          endWaterDepthMm: cad.maximumDepthMm,
-          floorProfile: "HORIZONTAL"
-        };
-      }
-      const maximumDepthMm = Math.max(...scaledZones.map(zoneDepth));
+      if (last) scaledZones[scaledZones.length - 1] = {
+        ...last,
+        lengthMm: Math.max(1, last.lengthMm + targetLengthMm - scaledTotal)
+      };
+
+      const updatedZones = scaledZones.map((zone) => applyDepthAssignments(
+        zone,
+        cad.zoneDepths.filter((assignment) => assignment.zoneId === zone.id)
+      ));
+      const maximumDepthMm = Math.max(...updatedZones.map(zoneDepth));
       return {
         ...current,
         geometry: {
@@ -190,7 +250,7 @@ export function App() {
           internalLengthMm: targetLengthMm,
           internalWidthMm: targetWidthMm,
           waterDepthMm: maximumDepthMm,
-          depthZones: scaledZones
+          depthZones: updatedZones
         }
       };
     });
@@ -199,6 +259,8 @@ export function App() {
   if (loading) return <div className="loading-screen">Carregando ambiente seguro…</div>;
   if (!user) return <AuthScreen />;
 
+  const latestRevision = revisions[0] ?? null;
+  const viewingHistorical = Boolean(activeRevision && latestRevision && activeRevision.id !== latestRevision.id);
   const statusClass = result?.overallStatus === "PASS" ? "sb-pass" : result?.overallStatus === "FAIL" ? "sb-fail" : "sb-review";
   const engineLabel = result
     ? isIntegratedDesignResult(result) ? result.integrationVersion : result.engineVersion
@@ -224,19 +286,28 @@ export function App() {
           <div className="welcome-features"><span>Motor determinístico</span><span>CAD 2D calibrado</span><span>SPT por camadas</span><span>Histórico SHA-256</span></div>
         </div></section> : <>
           <section className="project-header"><div><h1>{activeProject.name}</h1><p>{activeProject.location || "Local não informado"}</p></div><span className="project-state">{activeProject.status === "calculated" ? "Calculado" : "Rascunho"}</span></section>
+          {cadDraftConflict && <div className="error-banner" role="alert">
+            <strong>Rascunho CAD baseado em revisão anterior encontrado.</strong>
+            <p>A revisão mais nova foi mantida. Restaure o rascunho somente para reaproveitar conscientemente aquela geometria.</p>
+            <div><button type="button" className="secondary" onClick={restoreCadConflict}>Restaurar rascunho antigo</button> <button type="button" className="text-button" onClick={discardCadConflict}>Descartar cópia antiga</button></div>
+          </div>}
+          {viewingHistorical && <div className="local-banner"><strong>REVISÃO HISTÓRICA</strong> — resultados e prancha correspondem à R{activeRevision!.revisionNumber}; o CAD e o formulário continuam mostrando o rascunho atual e não serão sobrescritos.</div>}
           <CadGeometryPanel
             key={activeProject.id}
             ownerId={user.id}
             projectId={activeProject.id}
             projectName={activeProject.name}
             document={editorInput.cadGeometry ?? EMPTY_CAD}
+            zones={editorInput.geometry.depthZones ?? []}
+            baseRevisionId={latestRevision?.id ?? null}
+            baseInputHash={latestRevision?.inputHash ?? null}
             onChange={updateCadGeometry}
             onApplyEnvelope={applyCadEnvelope}
           />
           {activeRevision && <DrawingPanel project={activeProject} revision={activeRevision} />}
           {result && <ResultDashboard result={result} />}
           {result && isIntegratedDesignResult(result) && <GeotechnicalPanel result={result} />}
-          {result && !isIntegratedDesignResult(result) && <section className="results-panel"><div className="warning-box"><strong>Revisão histórica</strong><p>Esta revisão foi calculada antes da integração geotécnica e normativa. Os dados antigos foram preservados; o editor recebeu valores padrão apenas para uma nova revisão.</p></div></section>}
+          {result && !isIntegratedDesignResult(result) && <section className="results-panel"><div className="warning-box"><strong>Revisão histórica</strong><p>Esta revisão foi calculada antes da integração geotécnica e normativa. Os dados antigos foram preservados; o rascunho atual não foi alterado.</p></div></section>}
           {result?.masonry && <MasonryPanel masonry={result.masonry} />}
         </>}
       </main>

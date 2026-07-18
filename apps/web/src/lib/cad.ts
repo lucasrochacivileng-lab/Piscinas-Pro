@@ -1,5 +1,6 @@
 import {
   buildCadGeometryDxf,
+  normalizeCadGeometryDocument,
   type CadGeometryDocument,
   type CadPath,
   type CadPoint
@@ -8,12 +9,24 @@ import {
 const midpoint = (a: CadPoint, b: CadPoint): CadPoint => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 const point = (value: CadPoint): string => `${value.x.toFixed(2)} ${value.y.toFixed(2)}`;
 
+export interface CadDraftContext {
+  readonly baseRevisionId: string | null;
+  readonly baseInputHash: string | null;
+}
+
+export interface CadDraftRecord {
+  readonly version: "cad-draft-1.0.0";
+  readonly updatedAt: string;
+  readonly baseRevisionId: string | null;
+  readonly baseInputHash: string | null;
+  readonly document: CadGeometryDocument;
+}
+
 export function cadPathSvgData(path: Pick<CadPath, "points" | "curve" | "closed">): string {
   if (path.points.length === 0) return "";
   if (path.curve === "POLYLINE" || path.points.length < 3) {
     return `M ${path.points.map(point).join(" L ")}${path.closed ? " Z" : ""}`;
   }
-
   if (path.closed) {
     const first = path.points[0]!;
     const last = path.points.at(-1)!;
@@ -26,13 +39,11 @@ export function cadPathSvgData(path: Pick<CadPath, "points" | "curve" | "closed"
     commands.push("Z");
     return commands.join(" ");
   }
-
   const commands = [`M ${point(path.points[0]!)}`];
   for (let index = 1; index < path.points.length - 1; index += 1) {
     const control = path.points[index]!;
     const next = path.points[index + 1]!;
-    const end = index === path.points.length - 2 ? next : midpoint(control, next);
-    commands.push(`Q ${point(control)} ${point(end)}`);
+    commands.push(`Q ${point(control)} ${point(index === path.points.length - 2 ? next : midpoint(control, next))}`);
   }
   return commands.join(" ");
 }
@@ -45,22 +56,114 @@ export function downloadCadGeometryDxf(document: CadGeometryDocument, projectNam
   const slug = projectName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "piscina";
   link.download = `${slug}-geometria-cad.dxf`;
   link.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 export function cadDraftKey(ownerId: string, projectId: string): string {
   return `poolstruct:cad-2d:${ownerId}:${projectId}`;
 }
 
-export function loadCadDraft(ownerId: string, projectId: string): CadGeometryDocument | null {
+export function cadDraftConflictKey(ownerId: string, projectId: string): string {
+  return `${cadDraftKey(ownerId, projectId)}:conflict`;
+}
+
+const sameContext = (record: CadDraftRecord, context: CadDraftContext): boolean =>
+  record.baseRevisionId === context.baseRevisionId && record.baseInputHash === context.baseInputHash;
+
+const parseDraftRecord = (value: unknown): CadDraftRecord | null => {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<CadDraftRecord>;
+  if (candidate.version !== "cad-draft-1.0.0" || typeof candidate.updatedAt !== "string") return null;
+  if (candidate.baseRevisionId !== null && typeof candidate.baseRevisionId !== "string") return null;
+  if (candidate.baseInputHash !== null && typeof candidate.baseInputHash !== "string") return null;
+  const document = normalizeCadGeometryDocument(candidate.document);
+  return document ? {
+    version: "cad-draft-1.0.0",
+    updatedAt: candidate.updatedAt,
+    baseRevisionId: candidate.baseRevisionId ?? null,
+    baseInputHash: candidate.baseInputHash ?? null,
+    document
+  } : null;
+};
+
+const preserveConflict = (ownerId: string, projectId: string, record: CadDraftRecord): void => {
+  try {
+    localStorage.setItem(cadDraftConflictKey(ownerId, projectId), JSON.stringify(record));
+  } catch {
+    // O rascunho principal permanece intacto quando o navegador não permite criar a cópia.
+  }
+};
+
+export function loadCadDraft(
+  ownerId: string,
+  projectId: string,
+  context: CadDraftContext
+): CadGeometryDocument | null {
   try {
     const raw = localStorage.getItem(cadDraftKey(ownerId, projectId));
-    return raw ? JSON.parse(raw) as CadGeometryDocument : null;
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    const record = parseDraftRecord(parsed);
+    if (record) {
+      if (sameContext(record, context)) return record.document;
+      preserveConflict(ownerId, projectId, record);
+      return null;
+    }
+
+    const legacyDocument = normalizeCadGeometryDocument(parsed);
+    if (!legacyDocument) return null;
+    if (context.baseRevisionId === null && context.baseInputHash === null) return legacyDocument;
+    preserveConflict(ownerId, projectId, {
+      version: "cad-draft-1.0.0",
+      updatedAt: new Date().toISOString(),
+      baseRevisionId: null,
+      baseInputHash: null,
+      document: legacyDocument
+    });
+    return null;
   } catch {
     return null;
   }
 }
 
-export function saveCadDraft(ownerId: string, projectId: string, document: CadGeometryDocument): void {
-  localStorage.setItem(cadDraftKey(ownerId, projectId), JSON.stringify(document));
+export function loadCadDraftConflict(ownerId: string, projectId: string): CadGeometryDocument | null {
+  try {
+    const raw = localStorage.getItem(cadDraftConflictKey(ownerId, projectId));
+    if (!raw) return null;
+    const record = parseDraftRecord(JSON.parse(raw));
+    return record?.document ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearCadDraftConflict(ownerId: string, projectId: string): void {
+  try {
+    localStorage.removeItem(cadDraftConflictKey(ownerId, projectId));
+  } catch {
+    // Sem ação adicional: o conflito continuará disponível na próxima sessão.
+  }
+}
+
+export function saveCadDraft(
+  ownerId: string,
+  projectId: string,
+  document: CadGeometryDocument,
+  context: CadDraftContext
+): boolean {
+  try {
+    const normalized = normalizeCadGeometryDocument(document);
+    if (!normalized) return false;
+    const record: CadDraftRecord = {
+      version: "cad-draft-1.0.0",
+      updatedAt: new Date().toISOString(),
+      baseRevisionId: context.baseRevisionId,
+      baseInputHash: context.baseInputHash,
+      document: normalized
+    };
+    localStorage.setItem(cadDraftKey(ownerId, projectId), JSON.stringify(record));
+    return true;
+  } catch {
+    return false;
+  }
 }

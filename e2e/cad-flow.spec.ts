@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
 });
 
-test("importa PDF, calibra, desenha, mede e exporta DXF", async ({ page }) => {
+test("importa PDF, calibra, orienta, mede e preserva o rascunho ao abrir histórico", async ({ page }) => {
   await page.getByRole("button", { name: "Novo projeto" }).click();
   const navigator = page.locator("aside.navigator");
   await navigator.getByLabel("Nome").fill("Piscina CAD Curva");
@@ -43,19 +43,34 @@ test("importa PDF, calibra, desenha, mede e exporta DXF", async ({ page }) => {
     await canvas.click({ position });
   }
   await page.getByRole("button", { name: "Finalizar", exact: true }).click();
+  await expect(page.locator(".cad-path.boundary")).toHaveCount(1);
 
-  await page.getByRole("spinbutton", { name: "Profundidade a inserir mm" }).fill("1400");
+  await page.getByRole("button", { name: "Eixo longitudinal", exact: true }).click();
+  await canvas.click({ position: { x: 150, y: 330 } });
+  await canvas.click({ position: { x: 700, y: 330 } });
+  await expect(page.getByText("EIXO DEFINIDO", { exact: true })).toBeVisible();
+
+  const depthInput = page.getByRole("spinbutton", { name: "Profundidade a inserir mm" });
+  await depthInput.fill("1400");
   await page.getByRole("button", { name: "Profundidade", exact: true }).click();
   await canvas.click({ position: { x: 430, y: 350 } });
+  await expect(page.locator(".cad-depth")).toHaveCount(1);
+  await canvas.click({ position: { x: 430, y: 350 } });
+  await expect(page.getByRole("button", { name: "Excluir" })).toBeEnabled();
+  await depthInput.focus();
+  await depthInput.press("End");
+  await depthInput.press("Backspace");
+  await expect(page.locator(".cad-depth")).toHaveCount(1);
+  await depthInput.fill("1400");
 
   const area = page.locator(".cad-metrics article").filter({ hasText: "Área interna" });
   const perimeter = page.locator(".cad-metrics article").filter({ hasText: "Perímetro" });
   await expect(area).not.toContainText("—");
   await expect(perimeter).not.toContainText("—");
-  await expect(page.locator(".cad-metrics article").filter({ hasText: "Profundidade máxima" })).toContainText("1.400");
+  await expect(page.locator(".cad-metrics article").filter({ hasText: "Profundidade máxima válida" })).toContainText("1.400");
 
-  await page.getByRole("button", { name: "Aplicar envelope ao cálculo" }).click();
-  await expect(page.getByText(/Envelope alinhado aos eixos aplicado/)).toBeVisible();
+  await page.getByRole("button", { name: "Aplicar ao cálculo" }).click();
+  await expect(page.getByText(/Dimensões orientadas e cotas vinculadas aplicadas/)).toBeVisible();
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Exportar DXF" }).click();
@@ -66,7 +81,20 @@ test("importa PDF, calibra, desenha, mede e exporta DXF", async ({ page }) => {
   const dxf = await readFile(path!, "utf8");
   expect(dxf).toContain("CONTORNO");
   expect(dxf).toContain("PROFUNDIDADE");
+  expect(dxf).toContain("EIXO_LONGITUDINAL");
 
   await page.getByRole("button", { name: "Calcular e salvar revisão" }).click();
   await expect(page.getByRole("button", { name: /R1/ })).toBeVisible();
+  await page.getByRole("button", { name: "Calcular e salvar revisão" }).click();
+  await expect(page.getByRole("button", { name: /R2/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "Quebra reta", exact: true }).click();
+  await canvas.click({ position: { x: 280, y: 270 } });
+  await canvas.click({ position: { x: 590, y: 300 } });
+  await page.getByRole("button", { name: "Finalizar", exact: true }).click();
+  await expect(page.locator(".cad-path.breakline")).toHaveCount(1);
+
+  await page.getByRole("button", { name: /R1/ }).click();
+  await expect(page.getByText("REVISÃO HISTÓRICA", { exact: true })).toBeVisible();
+  await expect(page.locator(".cad-path.breakline")).toHaveCount(1);
 });

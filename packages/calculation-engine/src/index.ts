@@ -14,16 +14,22 @@ export {
   cadPathLengthMm,
   calibrateCadGeometry,
   createEmptyCadGeometryDocument,
+  hasCadGeometryContent,
+  isCadPointInsideBoundary,
   measureCadGeometry,
+  normalizeCadGeometryDocument,
   sampleCadPath,
+  setCadLongitudinalAxis,
   validateCadGeometry
 } from "./cad-geometry.js";
 export type {
   CadBackgroundReference,
   CadCalibration,
   CadDepthMarker,
+  CadDepthPosition,
   CadGeometryDocument,
   CadGeometryMeasurements,
+  CadLongitudinalAxis,
   CadPath,
   CadPathCurve,
   CadPathRole,
