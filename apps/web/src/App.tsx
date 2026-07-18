@@ -17,7 +17,11 @@ import { MasonryPanel } from "./components/MasonryPanel";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ResultDashboard } from "./components/ResultDashboard";
 import { RevisionHistory } from "./components/RevisionHistory";
-import { loadCadDraft } from "./lib/cad";
+import {
+  clearCadDraftConflict,
+  loadCadDraft,
+  loadCadDraftConflict
+} from "./lib/cad";
 import {
   isIntegratedDesignResult,
   normalizeIntegratedDesignInput,
@@ -88,6 +92,7 @@ export function App() {
   const [activeRevision, setActiveRevision] = useState<RevisionRecord | null>(null);
   const [editorInput, setEditorInput] = useState<IntegratedDesignInput>(DEFAULT_DESIGN_INPUT);
   const [result, setResult] = useState<StoredDesignResult | null>(null);
+  const [cadDraftConflict, setCadDraftConflict] = useState<CadGeometryDocument | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ErrorNotice | null>(null);
 
@@ -124,6 +129,7 @@ export function App() {
         baseRevisionId: latest?.id ?? null,
         baseInputHash: latest?.inputHash ?? null
       });
+      setCadDraftConflict(loadCadDraftConflict(user.id, project.id));
       setActiveRevision(latest ?? null);
       setEditorInput({ ...normalized, cadGeometry: draft ?? normalized.cadGeometry ?? createEmptyCadGeometryDocument() });
       setResult(latest?.result ?? null);
@@ -152,6 +158,7 @@ export function App() {
         setRevisions([]);
         setActiveRevision(null);
         setResult(null);
+        setCadDraftConflict(null);
         setEditorInput(DEFAULT_DESIGN_INPUT);
       }
       await refreshProjects();
@@ -182,9 +189,21 @@ export function App() {
   }
 
   function openRevision(revision: RevisionRecord) {
-    // O histórico é somente leitura: o rascunho atual permanece intacto no editor e no CAD.
     setActiveRevision(revision);
     setResult(revision.result);
+  }
+
+  function restoreCadConflict() {
+    if (!user || !activeProject || !cadDraftConflict) return;
+    setEditorInput((current) => ({ ...current, cadGeometry: cadDraftConflict }));
+    clearCadDraftConflict(user.id, activeProject.id);
+    setCadDraftConflict(null);
+  }
+
+  function discardCadConflict() {
+    if (!user || !activeProject) return;
+    clearCadDraftConflict(user.id, activeProject.id);
+    setCadDraftConflict(null);
   }
 
   const syncEditorInput = useCallback((input: IntegratedDesignInput) => setEditorInput(input), []);
@@ -267,6 +286,11 @@ export function App() {
           <div className="welcome-features"><span>Motor determinístico</span><span>CAD 2D calibrado</span><span>SPT por camadas</span><span>Histórico SHA-256</span></div>
         </div></section> : <>
           <section className="project-header"><div><h1>{activeProject.name}</h1><p>{activeProject.location || "Local não informado"}</p></div><span className="project-state">{activeProject.status === "calculated" ? "Calculado" : "Rascunho"}</span></section>
+          {cadDraftConflict && <div className="error-banner" role="alert">
+            <strong>Rascunho CAD baseado em revisão anterior encontrado.</strong>
+            <p>A revisão mais nova foi mantida. Restaure o rascunho somente para reaproveitar conscientemente aquela geometria.</p>
+            <div><button type="button" className="secondary" onClick={restoreCadConflict}>Restaurar rascunho antigo</button> <button type="button" className="text-button" onClick={discardCadConflict}>Descartar cópia antiga</button></div>
+          </div>}
           {viewingHistorical && <div className="local-banner"><strong>REVISÃO HISTÓRICA</strong> — resultados e prancha correspondem à R{activeRevision!.revisionNumber}; o CAD e o formulário continuam mostrando o rascunho atual e não serão sobrescritos.</div>}
           <CadGeometryPanel
             key={activeProject.id}
