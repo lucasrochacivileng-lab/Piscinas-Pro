@@ -13,6 +13,8 @@
     "build": "tsc -b && npm run build -w @poolstruct/web",
     "check": "tsc -b --pretty false && npm run check -w @poolstruct/web",
     "dev": "npm run dev -w @poolstruct/web",
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "prepare": "node scripts/install-hooks.mjs",
     "release:validate": "node scripts/validate-release.mjs",
     "release:validate:production": "node scripts/validate-release.mjs --production",
     "test": "vitest run",

@@ -35,6 +35,18 @@ Para incluir os seis cenarios Playwright e instalar o Chromium isolado quando ne
 powershell -ExecutionPolicy Bypass -File .\scripts\verify-local.ps1 -IncludeE2E
 ```
 
+### Hook de pre-push
+
+`npm install` aponta os hooks do Git para `.githooks`. O hook `pre-push` roda `npm run check` e cancela o push quando o TypeScript nao compila, para que nenhum commit quebrado chegue ao GitHub nem a Vercel. Quando o repositorio esta no Google Drive e nao consegue manter `node_modules`, o hook valida o commit em `%LOCALAPPDATA%\poolstruct\prepush`, reaproveitando as dependencias entre execucoes.
+
+Para ativar em um clone que ja possua dependencias instaladas:
+
+```powershell
+npm run hooks:install
+```
+
+Em uma emergencia o hook pode ser ignorado com `SKIP_PREPUSH_CHECK=1 git push`.
+
 ## Estrutura
 
 - `apps/web`: aplicacao React/Vite responsiva
