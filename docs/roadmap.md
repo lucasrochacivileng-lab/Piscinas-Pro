@@ -65,7 +65,7 @@ Status: concluida em 13/07/2026 na versao `0.5.0`.
 - [x] relatorios e traces do Playwright como artefatos;
 - [x] atualizacoes automatizadas de dependencias;
 - [x] politica de seguranca e checklist de homologacao;
-- [ ] primeiro workflow executado no GitHub;
+- [x] primeiro workflow executado no GitHub;
 - [ ] ambiente Supabase de staging provisionado;
 - [ ] deploy de staging aprovado.
 
@@ -102,3 +102,33 @@ Status: biblioteca de fabricantes e triagem normativa integrada em 16/07/2026 na
 - [x] elevacao modulada na prancha e quantitativos na memoria de calculo.
 
 A modulacao usa o metodo de eixo e serve para pre-dimensionamento academico. Amarracao detalhada, ancoragem e emenda das armaduras, cantos especiais, juntas e impermeabilizacao permanecem sob responsabilidade de engenheiro habilitado.
+
+## Fase 7 - Geometria realista, geotecnia e representacao
+
+Status: concluida em 18/07/2026 na versao `0.10.0`.
+
+Entregue entre 17 e 18/07/2026, em nove pull requests:
+
+- [x] catalogos de fabricantes e criterios normativos na biblioteca de blocos (#1);
+- [x] compatibilizacao com a ABNT NBR 6136-1:2026: classes, fbk, familias nominais, paredes, tolerancias e limites da Classe C (#11);
+- [x] alinhamento dos padroes imediatos ao TCC de Silva (2022) (#12);
+- [x] geometria escalonada com prainha, multiplas profundidades e paredes individualizadas (#13);
+- [x] integracao de SPT, flutuacao global e materiais normativos (#15);
+- [x] publicacao automatica restrita a `main` (#16);
+- [x] piscina com praia inclinada e lajes por zona (#17);
+- [x] CAD 2D calibrado da geometria (#18);
+- [x] protecao do historico e integridade do CAD 2D (#19);
+- [x] requisitos fisicos de recebimento do lote: retracao por secagem e absorcao por tipo de agregado, ensaiados conforme a ABNT NBR 6136-2;
+- [x] previews de branch desligados, hook de pre-push e instrucoes de agentes.
+
+Os requisitos fisicos entram como verificacao `REQUIRES_REVIEW`: o motor registra os limites normativos, mas a conformidade depende de ensaio do lote e do certificado do fabricante.
+
+## Proximos passos
+
+Itens abertos que nao dependem de nova modelagem:
+
+- [ ] parecer assinado por engenheiro independente (gate da Fase 3);
+- [ ] drill de restauracao contra projeto Supabase isolado (gate da Fase 3);
+- [ ] ambiente Supabase de staging e deploy de staging aprovado (gates da Fase 4);
+- [ ] compatibilizacao integral com a serie ABNT NBR 6136-1:2026 vigente, hoje bloqueada por `REQUIRES_REVIEW`;
+- [ ] ensaios de lote que convertam as verificacoes normativas de `REQUIRES_REVIEW` para `PASS`.

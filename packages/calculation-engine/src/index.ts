@@ -36,6 +36,7 @@ export type {
   CadPoint
 } from "./cad-geometry.js";
 export {
+  absorptionLimitsPercent,
   findBlockWebRequirement,
   findClassCUseLimit,
   findNominalBlockFamily,
@@ -45,11 +46,14 @@ export {
   NBR_6136_1_2026_DIMENSIONAL_TOLERANCES,
   NBR_6136_1_2026_MINIMUM_MITER_RADIUS_MM,
   NBR_6136_1_2026_NOMINAL_FAMILIES,
+  NBR_6136_1_2026_PHYSICAL_REQUIREMENTS,
   NBR_6136_1_2026_STRENGTH_RULES,
   NBR_6136_1_2026_WEB_REQUIREMENTS,
   validateConcreteBlockStrength
 } from "./block-standard.js";
 export type {
+  BlockAggregate,
+  BlockPhysicalRequirements,
   BlockWebRequirement,
   ClassCUseLimit,
   ConcreteBlockClass,

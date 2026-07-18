@@ -5,6 +5,7 @@ import {
   inferLegacyConcreteBlockClass,
   minimumMiterRadiusMm,
   NBR_6136_1_2026_DIMENSIONAL_TOLERANCES,
+  NBR_6136_1_2026_PHYSICAL_REQUIREMENTS,
   validateConcreteBlockStrength,
   type ConcreteBlockClass
 } from "./block-standard.js";
@@ -442,6 +443,15 @@ export function runPhase1Design(
           ? `Classe C com largura ${classCUseLimit.widthMm} mm: uso estrutural limitado a ${classCUseLimit.maximumStoreys} pavimento(s).`
           : `Classe C com largura ${classCUseLimit.widthMm} mm: somente uso sem função estrutural.`
   };
+  const physicalRequirements = NBR_6136_1_2026_PHYSICAL_REQUIREMENTS;
+  const physicalAcceptanceCheck: EngineeringCheck = {
+    id: "nbr-6136-1-2026-physical-acceptance",
+    status: "REQUIRES_REVIEW",
+    demand: 0,
+    resistance: physicalRequirements.maximumDryingShrinkagePercent,
+    unit: "%",
+    message: `Ensaiar conforme ABNT NBR 6136-2: retração por secagem ≤ ${physicalRequirements.maximumDryingShrinkagePercent}%; absorção com agregado normal ≤ ${physicalRequirements.normalAggregateAbsorptionIndividualPercent}% individual e ≤ ${physicalRequirements.normalAggregateAbsorptionMeanPercent}% média (agregado leve: ${physicalRequirements.lightweightAggregateAbsorptionIndividualPercent}% e ${physicalRequirements.lightweightAggregateAbsorptionMeanPercent}%); incluir absorção inicial de água.`
+  };
   const lotAcceptanceCheck: EngineeringCheck = {
     id: "nbr-6136-lot-acceptance",
     status: "REQUIRES_REVIEW",
@@ -485,6 +495,7 @@ export function runPhase1Design(
     miterRadiusCheck,
     visualInspectionCheck,
     classCUseLimitCheck,
+    physicalAcceptanceCheck,
     lotAcceptanceCheck,
     certificationCheck
   ];

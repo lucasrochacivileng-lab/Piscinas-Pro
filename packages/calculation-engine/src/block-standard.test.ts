@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  absorptionLimitsPercent,
   findBlockWebRequirement,
   findClassCUseLimit,
   findNominalBlockFamily,
   inferLegacyConcreteBlockClass,
   minimumMiterRadiusMm,
+  NBR_6136_1_2026_PHYSICAL_REQUIREMENTS,
   validateConcreteBlockStrength
 } from "./block-standard.js";
 
@@ -34,6 +36,20 @@ describe("ABNT NBR 6136-1:2026 block rules", () => {
     expect(findBlockWebRequirement("C", 90, 290)?.minimumEquivalentWallMm).toBe(44);
     expect(minimumMiterRadiusMm("A")).toBe(40);
     expect(minimumMiterRadiusMm("C")).toBe(20);
+  });
+
+  it("cadastra os requisitos físicos ensaiados conforme a NBR 6136-2", () => {
+    expect(NBR_6136_1_2026_PHYSICAL_REQUIREMENTS.maximumDryingShrinkagePercent).toBe(0.055);
+    expect(NBR_6136_1_2026_PHYSICAL_REQUIREMENTS.initialWaterAbsorptionTestRequired).toBe(true);
+    expect(absorptionLimitsPercent("normal")).toEqual({ individual: 11, mean: 10 });
+    expect(absorptionLimitsPercent("lightweight")).toEqual({ individual: 16, mean: 13 });
+  });
+
+  it("mantém o limite individual de absorção acima da média em ambos os agregados", () => {
+    for (const aggregate of ["normal", "lightweight"] as const) {
+      const limits = absorptionLimitsPercent(aggregate);
+      expect(limits.individual).toBeGreaterThan(limits.mean);
+    }
   });
 
   it("cadastra as limitações de uso da Classe C por largura", () => {

@@ -2,7 +2,7 @@
 
 POOLSTRUCT e uma base de software para pre-dimensionamento e verificacao rastreavel de piscinas com paredes em alvenaria estrutural e laje de fundo em concreto armado. O objetivo e transformar entradas geometricas, materiais e perfis tecnicos versionados em memorias de calculo auditaveis.
 
-> Estado: biblioteca técnica integrada na versão `0.9.0`. O usuário escolhe fabricante, família normativa e `fbk`; o cálculo retorna fiadas, peças reais, canaletas, encontros, células grauteadas e verificações específicas para piscinas enterradas. Catálogo não substitui certificado e ensaios do lote.
+> Estado: geometria realista, geotecnia e CAD 2D integrados na versão `0.10.0`. O usuário modela prainha, degraus e praia inclinada, escolhe fabricante, família normativa e `fbk`, e o cálculo retorna zonas de profundidade, paredes individualizadas, lajes por zona, fiadas, peças reais, canaletas, encontros, células grauteadas e verificações específicas para piscinas enterradas. Catálogo não substitui certificado e ensaios do lote.
 
 ## Requisitos
 

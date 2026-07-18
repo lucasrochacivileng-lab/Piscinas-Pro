@@ -32,6 +32,9 @@ describe("buildMemoryHtml", () => {
     expect(html).toContain("Flutuação global");
     expect(html).toContain("Argamassa");
     expect(html).toContain(result.masonry!.family.label);
+    expect(html).toContain("Controle do lote — ABNT NBR 6136-2");
+    expect(html).toContain("0,055%");
+    expect(html).toContain("≤ 11% individual");
     expect(html).not.toContain("Piscina <Norte>");
   });
 

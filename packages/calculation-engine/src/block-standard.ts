@@ -47,6 +47,16 @@ export interface ClassCUseLimit {
   readonly structuralUsePermitted: boolean;
 }
 
+/** Requisitos fisicos do bloco, ensaiados conforme a ABNT NBR 6136-2. */
+export interface BlockPhysicalRequirements {
+  readonly maximumDryingShrinkagePercent: number;
+  readonly normalAggregateAbsorptionIndividualPercent: number;
+  readonly normalAggregateAbsorptionMeanPercent: number;
+  readonly lightweightAggregateAbsorptionIndividualPercent: number;
+  readonly lightweightAggregateAbsorptionMeanPercent: number;
+  readonly initialWaterAbsorptionTestRequired: boolean;
+}
+
 const EPSILON = 1e-9;
 
 export const NBR_6136_1_2026_STRENGTH_RULES: Readonly<Record<ConcreteBlockClass, ConcreteBlockStrengthRule>> = Object.freeze({
@@ -60,6 +70,15 @@ export const NBR_6136_1_2026_DIMENSIONAL_TOLERANCES = Object.freeze({
   heightPlusMinusMm: 3,
   lengthPlusMinusMm: 3,
   wallThicknessNegativeMm: 1
+});
+
+export const NBR_6136_1_2026_PHYSICAL_REQUIREMENTS: BlockPhysicalRequirements = Object.freeze({
+  maximumDryingShrinkagePercent: 0.055,
+  normalAggregateAbsorptionIndividualPercent: 11,
+  normalAggregateAbsorptionMeanPercent: 10,
+  lightweightAggregateAbsorptionIndividualPercent: 16,
+  lightweightAggregateAbsorptionMeanPercent: 13,
+  initialWaterAbsorptionTestRequired: true
 });
 
 export const NBR_6136_1_2026_MINIMUM_MITER_RADIUS_MM: Readonly<Record<"A_B" | "C", number>> = Object.freeze({
@@ -159,4 +178,22 @@ export function minimumMiterRadiusMm(blockClass: ConcreteBlockClass): number {
 
 export function findClassCUseLimit(widthMm: number): ClassCUseLimit | undefined {
   return NBR_6136_1_2026_CLASS_C_USE_LIMITS.find((limit) => limit.widthMm === widthMm);
+}
+
+export type BlockAggregate = "normal" | "lightweight";
+
+/** Limites de absorcao por tipo de agregado, em porcentagem. */
+export function absorptionLimitsPercent(
+  aggregate: BlockAggregate
+): { readonly individual: number; readonly mean: number } {
+  const requirements = NBR_6136_1_2026_PHYSICAL_REQUIREMENTS;
+  return aggregate === "lightweight"
+    ? {
+      individual: requirements.lightweightAggregateAbsorptionIndividualPercent,
+      mean: requirements.lightweightAggregateAbsorptionMeanPercent
+    }
+    : {
+      individual: requirements.normalAggregateAbsorptionIndividualPercent,
+      mean: requirements.normalAggregateAbsorptionMeanPercent
+    };
 }
