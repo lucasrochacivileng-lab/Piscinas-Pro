@@ -51,15 +51,17 @@ test("importa PDF, calibra, orienta, mede e preserva o rascunho ao abrir histór
   await expect(page.getByText("EIXO DEFINIDO", { exact: true })).toBeVisible();
 
   const depthInput = page.getByRole("spinbutton", { name: "Profundidade a inserir mm" });
-  await canvas.click({ position: { x: 150, y: 150 } });
+  await depthInput.fill("1400");
+  await page.getByRole("button", { name: "Profundidade", exact: true }).click();
+  await canvas.click({ position: { x: 430, y: 350 } });
+  await expect(page.locator(".cad-depth")).toHaveCount(1);
+  await canvas.click({ position: { x: 430, y: 350 } });
   await expect(page.getByRole("button", { name: "Excluir" })).toBeEnabled();
   await depthInput.focus();
   await depthInput.press("End");
   await depthInput.press("Backspace");
-  await expect(page.locator(".cad-path.boundary")).toHaveCount(1);
+  await expect(page.locator(".cad-depth")).toHaveCount(1);
   await depthInput.fill("1400");
-  await page.getByRole("button", { name: "Profundidade", exact: true }).click();
-  await canvas.click({ position: { x: 430, y: 350 } });
 
   const area = page.locator(".cad-metrics article").filter({ hasText: "Área interna" });
   const perimeter = page.locator(".cad-metrics article").filter({ hasText: "Perímetro" });
