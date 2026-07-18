@@ -51,7 +51,8 @@ test("importa PDF, calibra, orienta, mede e preserva o rascunho ao abrir histór
   await expect(page.getByText("EIXO DEFINIDO", { exact: true })).toBeVisible();
 
   const depthInput = page.getByRole("spinbutton", { name: "Profundidade a inserir mm" });
-  await page.locator(".cad-path-hit").first().click();
+  await canvas.click({ position: { x: 150, y: 150 } });
+  await expect(page.getByRole("button", { name: "Excluir" })).toBeEnabled();
   await depthInput.focus();
   await depthInput.press("End");
   await depthInput.press("Backspace");
