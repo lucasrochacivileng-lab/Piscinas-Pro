@@ -27,7 +27,6 @@ export function cadPathSvgData(path: Pick<CadPath, "points" | "curve" | "closed"
   if (path.curve === "POLYLINE" || path.points.length < 3) {
     return `M ${path.points.map(point).join(" L ")}${path.closed ? " Z" : ""}`;
   }
-
   if (path.closed) {
     const first = path.points[0]!;
     const last = path.points.at(-1)!;
@@ -40,13 +39,11 @@ export function cadPathSvgData(path: Pick<CadPath, "points" | "curve" | "closed"
     commands.push("Z");
     return commands.join(" ");
   }
-
   const commands = [`M ${point(path.points[0]!)}`];
   for (let index = 1; index < path.points.length - 1; index += 1) {
     const control = path.points[index]!;
     const next = path.points[index + 1]!;
-    const end = index === path.points.length - 2 ? next : midpoint(control, next);
-    commands.push(`Q ${point(control)} ${point(end)}`);
+    commands.push(`Q ${point(control)} ${point(index === path.points.length - 2 ? next : midpoint(control, next))}`);
   }
   return commands.join(" ");
 }
@@ -64,6 +61,10 @@ export function downloadCadGeometryDxf(document: CadGeometryDocument, projectNam
 
 export function cadDraftKey(ownerId: string, projectId: string): string {
   return `poolstruct:cad-2d:${ownerId}:${projectId}`;
+}
+
+export function cadDraftConflictKey(ownerId: string, projectId: string): string {
+  return `${cadDraftKey(ownerId, projectId)}:conflict`;
 }
 
 const sameContext = (record: CadDraftRecord, context: CadDraftContext): boolean =>
@@ -85,6 +86,14 @@ const parseDraftRecord = (value: unknown): CadDraftRecord | null => {
   } : null;
 };
 
+const preserveConflict = (ownerId: string, projectId: string, record: CadDraftRecord): void => {
+  try {
+    localStorage.setItem(cadDraftConflictKey(ownerId, projectId), JSON.stringify(record));
+  } catch {
+    // O rascunho principal permanece intacto quando o navegador não permite criar a cópia.
+  }
+};
+
 export function loadCadDraft(
   ownerId: string,
   projectId: string,
@@ -95,13 +104,44 @@ export function loadCadDraft(
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     const record = parseDraftRecord(parsed);
-    if (record) return sameContext(record, context) ? record.document : null;
+    if (record) {
+      if (sameContext(record, context)) return record.document;
+      preserveConflict(ownerId, projectId, record);
+      return null;
+    }
 
-    // Migração de rascunhos da primeira versão: só é segura antes da primeira revisão.
-    if (context.baseRevisionId !== null || context.baseInputHash !== null) return null;
-    return normalizeCadGeometryDocument(parsed);
+    const legacyDocument = normalizeCadGeometryDocument(parsed);
+    if (!legacyDocument) return null;
+    if (context.baseRevisionId === null && context.baseInputHash === null) return legacyDocument;
+    preserveConflict(ownerId, projectId, {
+      version: "cad-draft-1.0.0",
+      updatedAt: new Date().toISOString(),
+      baseRevisionId: null,
+      baseInputHash: null,
+      document: legacyDocument
+    });
+    return null;
   } catch {
     return null;
+  }
+}
+
+export function loadCadDraftConflict(ownerId: string, projectId: string): CadGeometryDocument | null {
+  try {
+    const raw = localStorage.getItem(cadDraftConflictKey(ownerId, projectId));
+    if (!raw) return null;
+    const record = parseDraftRecord(JSON.parse(raw));
+    return record?.document ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearCadDraftConflict(ownerId: string, projectId: string): void {
+  try {
+    localStorage.removeItem(cadDraftConflictKey(ownerId, projectId));
+  } catch {
+    // Sem ação adicional: o conflito continuará disponível na próxima sessão.
   }
 }
 
