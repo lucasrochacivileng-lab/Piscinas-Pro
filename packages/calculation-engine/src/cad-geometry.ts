@@ -73,34 +73,19 @@ export interface CadGeometryMeasurements {
 }
 
 const EPSILON = 1e-7;
-const finite = (value: number): boolean => Number.isFinite(value);
+const isFiniteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 const midpoint = (a: CadPoint, b: CadPoint): CadPoint => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 const distance = (a: CadPoint, b: CadPoint): number => Math.hypot(b.x - a.x, b.y - a.y);
 const samePoint = (a: CadPoint, b: CadPoint): boolean => distance(a, b) <= EPSILON;
 const cross = (a: CadPoint, b: CadPoint, c: CadPoint): number =>
   (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 
-const quadraticPoint = (start: CadPoint, control: CadPoint, end: CadPoint, t: number): CadPoint => {
-  const inverse = 1 - t;
-  return {
-    x: inverse * inverse * start.x + 2 * inverse * t * control.x + t * t * end.x,
-    y: inverse * inverse * start.y + 2 * inverse * t * control.y + t * t * end.y
-  };
-};
-
-const sampleQuadratic = (
-  start: CadPoint,
-  control: CadPoint,
-  end: CadPoint,
-  subdivisions: number,
-  includeStart: boolean
-): CadPoint[] => {
-  const points: CadPoint[] = [];
-  const first = includeStart ? 0 : 1;
-  for (let index = first; index <= subdivisions; index += 1) {
-    points.push(quadraticPoint(start, control, end, index / subdivisions));
-  }
-  return points;
+const pointFromUnknown = (value: unknown): CadPoint | null => {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<CadPoint>;
+  return isFiniteNumber(candidate.x) && isFiniteNumber(candidate.y)
+    ? { x: candidate.x, y: candidate.y }
+    : null;
 };
 
 export function createEmptyCadGeometryDocument(): CadGeometryDocument {
@@ -115,46 +100,28 @@ export function createEmptyCadGeometryDocument(): CadGeometryDocument {
 
 export function hasCadGeometryContent(document: CadGeometryDocument | undefined): boolean {
   return Boolean(document && (
-    document.paths.length > 0 ||
-    document.depthMarkers.length > 0 ||
-    document.calibration ||
-    document.longitudinalAxis ||
-    document.background
+    document.paths.length > 0 || document.depthMarkers.length > 0 || document.calibration ||
+    document.longitudinalAxis || document.background
   ));
 }
-
-const pointFromUnknown = (value: unknown): CadPoint | null => {
-  if (!value || typeof value !== "object") return null;
-  const candidate = value as Partial<CadPoint>;
-  return finite(candidate.x ?? Number.NaN) && finite(candidate.y ?? Number.NaN)
-    ? { x: candidate.x!, y: candidate.y! }
-    : null;
-};
 
 export function normalizeCadGeometryDocument(value: unknown): CadGeometryDocument | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<CadGeometryDocument>;
-  if (!finite(candidate.canvasWidth ?? Number.NaN) || !finite(candidate.canvasHeight ?? Number.NaN)) return null;
+  if (!isFiniteNumber(candidate.canvasWidth) || !isFiniteNumber(candidate.canvasHeight)) return null;
   if (!Array.isArray(candidate.paths) || !Array.isArray(candidate.depthMarkers)) return null;
 
   const paths: CadPath[] = [];
   for (const raw of candidate.paths) {
     if (!raw || typeof raw !== "object") return null;
     const path = raw as Partial<CadPath>;
-    if (typeof path.id !== "string" || typeof path.label !== "string") return null;
-    if (path.role !== "BOUNDARY" && path.role !== "BREAKLINE") return null;
-    if (path.curve !== "POLYLINE" && path.curve !== "SMOOTH") return null;
-    if (typeof path.closed !== "boolean" || !Array.isArray(path.points)) return null;
+    if (typeof path.id !== "string" || typeof path.label !== "string" ||
+        (path.role !== "BOUNDARY" && path.role !== "BREAKLINE") ||
+        (path.curve !== "POLYLINE" && path.curve !== "SMOOTH") ||
+        typeof path.closed !== "boolean" || !Array.isArray(path.points)) return null;
     const points = path.points.map(pointFromUnknown);
     if (points.some((point) => point === null)) return null;
-    paths.push({
-      id: path.id,
-      label: path.label,
-      role: path.role,
-      curve: path.curve,
-      closed: path.closed,
-      points: points as CadPoint[]
-    });
+    paths.push({ ...path, points: points as CadPoint[] } as CadPath);
   }
 
   const depthMarkers: CadDepthMarker[] = [];
@@ -162,12 +129,12 @@ export function normalizeCadGeometryDocument(value: unknown): CadGeometryDocumen
     if (!raw || typeof raw !== "object") return null;
     const marker = raw as Partial<CadDepthMarker>;
     const point = pointFromUnknown(marker.point);
-    if (!point || typeof marker.id !== "string" || typeof marker.label !== "string" || !finite(marker.depthMm ?? Number.NaN)) return null;
+    if (!point || typeof marker.id !== "string" || typeof marker.label !== "string" || !isFiniteNumber(marker.depthMm)) return null;
     depthMarkers.push({
       id: marker.id,
       label: marker.label,
       point,
-      depthMm: marker.depthMm!,
+      depthMm: marker.depthMm,
       ...(typeof marker.zoneId === "string" ? { zoneId: marker.zoneId } : {}),
       ...(marker.zonePosition === "UNIFORM" || marker.zonePosition === "START" || marker.zonePosition === "END"
         ? { zonePosition: marker.zonePosition }
@@ -175,39 +142,46 @@ export function normalizeCadGeometryDocument(value: unknown): CadGeometryDocumen
     });
   }
 
-  const calibration = candidate.calibration;
-  const pointA = calibration ? pointFromUnknown(calibration.pointA) : null;
-  const pointB = calibration ? pointFromUnknown(calibration.pointB) : null;
-  const normalizedCalibration = calibration && pointA && pointB &&
-    finite(calibration.knownDistanceMm) && finite(calibration.drawingDistanceUnits) && finite(calibration.mmPerUnit)
-    ? {
-      pointA,
-      pointB,
-      knownDistanceMm: calibration.knownDistanceMm,
-      drawingDistanceUnits: calibration.drawingDistanceUnits,
-      mmPerUnit: calibration.mmPerUnit
+  let calibration: CadCalibration | undefined;
+  if (candidate.calibration) {
+    const pointA = pointFromUnknown(candidate.calibration.pointA);
+    const pointB = pointFromUnknown(candidate.calibration.pointB);
+    if (pointA && pointB && isFiniteNumber(candidate.calibration.knownDistanceMm) &&
+        isFiniteNumber(candidate.calibration.drawingDistanceUnits) && isFiniteNumber(candidate.calibration.mmPerUnit)) {
+      calibration = {
+        pointA,
+        pointB,
+        knownDistanceMm: candidate.calibration.knownDistanceMm,
+        drawingDistanceUnits: candidate.calibration.drawingDistanceUnits,
+        mmPerUnit: candidate.calibration.mmPerUnit
+      };
     }
-    : undefined;
+  }
 
-  const axisA = candidate.longitudinalAxis ? pointFromUnknown(candidate.longitudinalAxis.pointA) : null;
-  const axisB = candidate.longitudinalAxis ? pointFromUnknown(candidate.longitudinalAxis.pointB) : null;
-  const longitudinalAxis = axisA && axisB ? { pointA: axisA, pointB: axisB } : undefined;
+  let longitudinalAxis: CadLongitudinalAxis | undefined;
+  if (candidate.longitudinalAxis) {
+    const pointA = pointFromUnknown(candidate.longitudinalAxis.pointA);
+    const pointB = pointFromUnknown(candidate.longitudinalAxis.pointB);
+    if (pointA && pointB) longitudinalAxis = { pointA, pointB };
+  }
 
-  const background = candidate.background && typeof candidate.background.fileName === "string" &&
-    typeof candidate.background.mimeType === "string" && finite(candidate.background.page) && finite(candidate.background.opacity)
-    ? {
+  let background: CadBackgroundReference | undefined;
+  if (candidate.background && typeof candidate.background.fileName === "string" &&
+      typeof candidate.background.mimeType === "string" && isFiniteNumber(candidate.background.page) &&
+      isFiniteNumber(candidate.background.opacity)) {
+    background = {
       fileName: candidate.background.fileName,
       mimeType: candidate.background.mimeType,
       page: candidate.background.page,
       opacity: candidate.background.opacity
-    }
-    : undefined;
+    };
+  }
 
   return {
     version: "cad-2d-1.1.0",
-    canvasWidth: candidate.canvasWidth!,
-    canvasHeight: candidate.canvasHeight!,
-    ...(normalizedCalibration ? { calibration: normalizedCalibration } : {}),
+    canvasWidth: candidate.canvasWidth,
+    canvasHeight: candidate.canvasHeight,
+    ...(calibration ? { calibration } : {}),
     ...(longitudinalAxis ? { longitudinalAxis } : {}),
     ...(background ? { background } : {}),
     paths,
@@ -226,10 +200,10 @@ export function calibrateCadGeometry(
   knownDistanceMm: number
 ): CadGeometryDocument {
   const drawingDistanceUnits = distance(pointA, pointB);
-  if (!finite(knownDistanceMm) || knownDistanceMm <= 0) {
+  if (!isFiniteNumber(knownDistanceMm) || knownDistanceMm <= 0) {
     throw new RangeError("A distância real de calibração deve ser positiva.");
   }
-  if (!finite(drawingDistanceUnits) || drawingDistanceUnits <= EPSILON) {
+  if (!isFiniteNumber(drawingDistanceUnits) || drawingDistanceUnits <= EPSILON) {
     throw new RangeError("Os pontos de calibração devem ser distintos.");
   }
   return {
@@ -254,6 +228,28 @@ export function setCadLongitudinalAxis(
   return { ...document, version: "cad-2d-1.1.0", longitudinalAxis: { pointA, pointB } };
 }
 
+const quadraticPoint = (start: CadPoint, control: CadPoint, end: CadPoint, t: number): CadPoint => {
+  const inverse = 1 - t;
+  return {
+    x: inverse * inverse * start.x + 2 * inverse * t * control.x + t * t * end.x,
+    y: inverse * inverse * start.y + 2 * inverse * t * control.y + t * t * end.y
+  };
+};
+
+const sampleQuadratic = (
+  start: CadPoint,
+  control: CadPoint,
+  end: CadPoint,
+  subdivisions: number,
+  includeStart: boolean
+): CadPoint[] => {
+  const points: CadPoint[] = [];
+  for (let index = includeStart ? 0 : 1; index <= subdivisions; index += 1) {
+    points.push(quadraticPoint(start, control, end, index / subdivisions));
+  }
+  return points;
+};
+
 export function sampleCadPath(path: CadPath, subdivisions = 12): readonly CadPoint[] {
   if (path.points.length === 0) return [];
   if (path.curve === "POLYLINE" || path.points.length < 3) {
@@ -267,17 +263,20 @@ export function sampleCadPath(path: CadPath, subdivisions = 12): readonly CadPoi
       const previous = path.points[(index - 1 + path.points.length) % path.points.length]!;
       const control = path.points[index]!;
       const next = path.points[(index + 1) % path.points.length]!;
-      const start = midpoint(previous, control);
-      const end = midpoint(control, next);
-      sampled.push(...sampleQuadratic(start, control, end, resolution, index === 0));
+      sampled.push(...sampleQuadratic(
+        midpoint(previous, control),
+        control,
+        midpoint(control, next),
+        resolution,
+        index === 0
+      ));
     }
-    sampled.push(sampled[0]!);
+    if (sampled.length > 0 && !samePoint(sampled[0]!, sampled.at(-1)!)) sampled.push(sampled[0]!);
     return sampled;
   }
 
-  const first = path.points[0]!;
-  const sampled: CadPoint[] = [first];
-  let current = first;
+  const sampled: CadPoint[] = [path.points[0]!];
+  let current = path.points[0]!;
   for (let index = 1; index < path.points.length - 1; index += 1) {
     const control = path.points[index]!;
     const next = path.points[index + 1]!;
@@ -297,13 +296,11 @@ export function cadPathLengthMm(path: CadPath, calibration: CadCalibration): num
   return cadPathLengthDrawingUnits(path) * calibration.mmPerUnit;
 }
 
-const polygonSignedAreaDrawingUnits2 = (points: readonly CadPoint[]): number => {
+const polygonSignedArea = (points: readonly CadPoint[]): number => {
   if (points.length < 4) return 0;
   let twiceArea = 0;
   for (let index = 0; index < points.length - 1; index += 1) {
-    const current = points[index]!;
-    const next = points[index + 1]!;
-    twiceArea += current.x * next.y - next.x * current.y;
+    twiceArea += points[index]!.x * points[index + 1]!.y - points[index + 1]!.x * points[index]!.y;
   }
   return twiceArea / 2;
 };
@@ -328,8 +325,7 @@ const hasSelfIntersection = (path: CadPath): boolean => {
   const segmentCount = Math.max(0, points.length - 1);
   for (let first = 0; first < segmentCount; first += 1) {
     for (let second = first + 1; second < segmentCount; second += 1) {
-      const adjacent = second === first + 1 || (path.closed && first === 0 && second === segmentCount - 1);
-      if (adjacent) continue;
+      if (second === first + 1 || (path.closed && first === 0 && second === segmentCount - 1)) continue;
       if (segmentsIntersect(points[first]!, points[first + 1]!, points[second]!, points[second + 1]!)) return true;
     }
   }
@@ -350,9 +346,8 @@ export function isCadPointInsideBoundary(document: CadGeometryDocument, point: C
   for (let index = 0, previous = polygon.length - 2; index < polygon.length - 1; previous = index++) {
     const current = polygon[index]!;
     const prior = polygon[previous]!;
-    const crosses = (current.y > point.y) !== (prior.y > point.y) &&
-      point.x < (prior.x - current.x) * (point.y - current.y) / (prior.y - current.y) + current.x;
-    if (crosses) inside = !inside;
+    if ((current.y > point.y) !== (prior.y > point.y) &&
+        point.x < (prior.x - current.x) * (point.y - current.y) / (prior.y - current.y) + current.x) inside = !inside;
   }
   return inside;
 }
@@ -393,18 +388,13 @@ export function measureCadGeometry(document: CadGeometryDocument): CadGeometryMe
 
   const scale = document.calibration.mmPerUnit;
   const boundarySamples = sampleCadPath(boundary);
-  const boundaryAreaMm2 = Math.abs(polygonSignedAreaDrawingUnits2(boundarySamples)) * scale * scale;
-  const boundaryPerimeterMm = cadPathLengthMm(boundary, document.calibration);
-  const breaklineLengthMm = breaklines.reduce((total, path) => total + cadPathLengthMm(path, document.calibration!), 0);
-  const totalPathLengthMm = document.paths.reduce((total, path) => total + cadPathLengthMm(path, document.calibration!), 0);
-
   const xs = boundarySamples.map((point) => point.x);
   const ys = boundarySamples.map((point) => point.y);
   const axisAlignedLengthMm = xs.length > 0 ? (Math.max(...xs) - Math.min(...xs)) * scale : null;
   const axisAlignedWidthMm = ys.length > 0 ? (Math.max(...ys) - Math.min(...ys)) * scale : null;
-
   let longitudinalLengthMm: number | null = null;
   let transverseWidthMm: number | null = null;
+
   if (document.longitudinalAxis) {
     const axisLength = distance(document.longitudinalAxis.pointA, document.longitudinalAxis.pointB);
     if (axisLength > EPSILON) {
@@ -418,10 +408,10 @@ export function measureCadGeometry(document: CadGeometryDocument): CadGeometryMe
   return {
     calibrated: true,
     axisDefined: longitudinalLengthMm !== null && transverseWidthMm !== null,
-    boundaryAreaM2: boundaryAreaMm2 / 1_000_000,
-    boundaryPerimeterM: boundaryPerimeterMm / 1_000,
-    breaklineLengthM: breaklineLengthMm / 1_000,
-    totalPathLengthM: totalPathLengthMm / 1_000,
+    boundaryAreaM2: Math.abs(polygonSignedArea(boundarySamples)) * scale * scale / 1_000_000,
+    boundaryPerimeterM: cadPathLengthMm(boundary, document.calibration) / 1_000,
+    breaklineLengthM: breaklines.reduce((sum, path) => sum + cadPathLengthMm(path, document.calibration!), 0) / 1_000,
+    totalPathLengthM: document.paths.reduce((sum, path) => sum + cadPathLengthMm(path, document.calibration!), 0) / 1_000,
     envelopeLengthMm: longitudinalLengthMm ?? axisAlignedLengthMm,
     envelopeWidthMm: transverseWidthMm ?? axisAlignedWidthMm,
     longitudinalLengthMm,
@@ -434,20 +424,18 @@ export function measureCadGeometry(document: CadGeometryDocument): CadGeometryMe
 
 export function validateCadGeometry(document: CadGeometryDocument): readonly string[] {
   const errors: string[] = [];
-  if (!finite(document.canvasWidth) || document.canvasWidth <= 0 || !finite(document.canvasHeight) || document.canvasHeight <= 0) {
+  if (!isFiniteNumber(document.canvasWidth) || document.canvasWidth <= 0 ||
+      !isFiniteNumber(document.canvasHeight) || document.canvasHeight <= 0) {
     errors.push("A prancheta CAD deve possuir dimensões positivas.");
   }
   if (document.calibration) {
-    const expectedDistance = distance(document.calibration.pointA, document.calibration.pointB);
-    if (!finite(document.calibration.mmPerUnit) || document.calibration.mmPerUnit <= 0 ||
-        !finite(document.calibration.knownDistanceMm) || document.calibration.knownDistanceMm <= 0 ||
-        expectedDistance <= EPSILON) {
+    const measured = distance(document.calibration.pointA, document.calibration.pointB);
+    if (!isFiniteNumber(document.calibration.mmPerUnit) || document.calibration.mmPerUnit <= 0 ||
+        !isFiniteNumber(document.calibration.knownDistanceMm) || document.calibration.knownDistanceMm <= 0 || measured <= EPSILON) {
       errors.push("A calibração CAD é inválida.");
-    } else {
-      const expectedScale = document.calibration.knownDistanceMm / expectedDistance;
-      if (Math.abs(expectedScale - document.calibration.mmPerUnit) > Math.max(EPSILON, expectedScale * 1e-6)) {
-        errors.push("A calibração CAD está inconsistente com os pontos informados.");
-      }
+    } else if (Math.abs(document.calibration.knownDistanceMm / measured - document.calibration.mmPerUnit) >
+      Math.max(EPSILON, document.calibration.mmPerUnit * 1e-6)) {
+      errors.push("A calibração CAD está inconsistente com os pontos informados.");
     }
   }
   if (document.longitudinalAxis && distance(document.longitudinalAxis.pointA, document.longitudinalAxis.pointB) <= EPSILON) {
@@ -467,7 +455,7 @@ export function validateCadGeometry(document: CadGeometryDocument): readonly str
     if (path.role === "BREAKLINE" && path.points.length < 2) {
       errors.push(`A linha de quebra ${path.label} deve possuir pelo menos dois pontos.`);
     }
-    if (path.points.some((point) => !finite(point.x) || !finite(point.y))) {
+    if (path.points.some((point) => !isFiniteNumber(point.x) || !isFiniteNumber(point.y))) {
       errors.push(`O caminho ${path.label} possui coordenadas inválidas.`);
       continue;
     }
@@ -476,7 +464,7 @@ export function validateCadGeometry(document: CadGeometryDocument): readonly str
     }
     if (path.role === "BOUNDARY" && path.points.length >= 3) {
       const sampled = sampleCadPath(path, 18);
-      if (Math.abs(polygonSignedAreaDrawingUnits2(sampled)) <= EPSILON) errors.push(`O contorno ${path.label} possui área nula.`);
+      if (Math.abs(polygonSignedArea(sampled)) <= EPSILON) errors.push(`O contorno ${path.label} possui área nula.`);
       if (hasSelfIntersection(path)) errors.push(`O contorno ${path.label} possui auto-interseção.`);
     }
   }
@@ -493,7 +481,7 @@ export function validateCadGeometry(document: CadGeometryDocument): readonly str
   for (const marker of document.depthMarkers) {
     if (ids.has(marker.id)) errors.push(`Identificador CAD duplicado: ${marker.id}.`);
     ids.add(marker.id);
-    if (!finite(marker.depthMm) || marker.depthMm < 0) errors.push(`A profundidade ${marker.label} é inválida.`);
+    if (!isFiniteNumber(marker.depthMm) || marker.depthMm < 0) errors.push(`A profundidade ${marker.label} é inválida.`);
     if (boundary && !isCadPointInsideBoundary(document, marker.point)) errors.push(`A profundidade ${marker.label} deve estar dentro do contorno.`);
     if ((marker.zoneId && !marker.zonePosition) || (!marker.zoneId && marker.zonePosition)) {
       errors.push(`A profundidade ${marker.label} possui associação de zona incompleta.`);
@@ -520,7 +508,6 @@ export function buildCadGeometryDxf(document: CadGeometryDocument, title = "POOL
   if (errors.length > 0) throw new RangeError(errors.join(" "));
   const scale = document.calibration.mmPerUnit;
   const entities: string[] = [dxfText("TEXTO", { x: 10, y: 20 }, title, scale, document.canvasHeight)];
-
   for (const path of document.paths) {
     const layer = path.role === "BOUNDARY" ? "CONTORNO" : "QUEBRA";
     const points = sampleCadPath(path, 18);
@@ -535,7 +522,6 @@ export function buildCadGeometryDxf(document: CadGeometryDocument, title = "POOL
     const association = marker.zoneId && marker.zonePosition ? ` [${marker.zoneId}/${marker.zonePosition}]` : "";
     entities.push(dxfText("PROFUNDIDADE", marker.point, `${marker.label}: -${(marker.depthMm / 1000).toFixed(3)} m${association}`, scale, document.canvasHeight));
   }
-
   return [
     "0", "SECTION", "2", "HEADER", "9", "$INSUNITS", "70", "4", "0", "ENDSEC",
     "0", "SECTION", "2", "ENTITIES", entities.join("\n"), "0", "ENDSEC", "0", "EOF", ""
