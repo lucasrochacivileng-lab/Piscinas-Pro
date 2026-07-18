@@ -1,4 +1,4 @@
-import type { CadGeometryDocument } from "./cad-geometry.js";
+import { hasCadGeometryContent, type CadGeometryDocument } from "./cad-geometry.js";
 import type { EngineeringCheck } from "./engineering.js";
 import {
   evaluateGeotechnicalModel,
@@ -105,7 +105,9 @@ export function runIntegratedDesign(input: IntegratedDesignInput): IntegratedDes
       ...structural.warnings,
       ...geotechnical.warnings,
       ...masonryMaterials.warnings,
-      ...(input.cadGeometry ? ["Geometria CAD vinculada à revisão; confirmar a equivalência entre o desenho vetorial e o modelo estrutural paramétrico."] : []),
+      ...(hasCadGeometryContent(input.cadGeometry)
+        ? ["Geometria CAD vinculada à revisão; confirmar a equivalência entre o desenho vetorial e o modelo estrutural paramétrico."]
+        : []),
       "Perfil normativo e dados de ensaio devem permanecer vinculados à revisão do projeto."
     ]
   };
