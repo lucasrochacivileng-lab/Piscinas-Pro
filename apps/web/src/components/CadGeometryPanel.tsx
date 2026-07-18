@@ -1,12 +1,17 @@
 import {
   calibrateCadGeometry,
   createEmptyCadGeometryDocument,
+  isCadPointInsideBoundary,
   measureCadGeometry,
+  setCadLongitudinalAxis,
+  validateCadGeometry,
+  type CadDepthPosition,
   type CadGeometryDocument,
   type CadPath,
   type CadPathCurve,
   type CadPathRole,
-  type CadPoint
+  type CadPoint,
+  type PoolDepthZoneInput
 } from "@poolstruct/calculation-engine";
 import {
   useEffect,
@@ -24,17 +29,25 @@ interface Props {
   readonly projectId: string;
   readonly projectName: string;
   readonly document: CadGeometryDocument;
+  readonly zones: readonly PoolDepthZoneInput[];
+  readonly baseRevisionId: string | null;
+  readonly baseInputHash: string | null;
   readonly onChange: (document: CadGeometryDocument) => void;
   readonly onApplyEnvelope: (geometry: {
     lengthMm: number;
     widthMm: number;
-    maximumDepthMm?: number;
+    zoneDepths: readonly {
+      zoneId: string;
+      position: CadDepthPosition;
+      depthMm: number;
+    }[];
   }) => void;
 }
 
 type CadTool =
   | "SELECT"
   | "CALIBRATE"
+  | "AXIS"
   | "BOUNDARY_LINE"
   | "BOUNDARY_CURVE"
   | "BREAKLINE_LINE"
@@ -50,11 +63,18 @@ interface DragTarget {
 const TOOL_LABEL: Readonly<Record<CadTool, string>> = {
   SELECT: "Selecionar",
   CALIBRATE: "Calibrar",
+  AXIS: "Eixo longitudinal",
   BOUNDARY_LINE: "Contorno reto",
   BOUNDARY_CURVE: "Contorno curvo",
   BREAKLINE_LINE: "Quebra reta",
   BREAKLINE_CURVE: "Quebra curva",
   DEPTH: "Profundidade"
+};
+
+const DEPTH_POSITION_LABEL: Readonly<Record<CadDepthPosition, string>> = {
+  UNIFORM: "Zona horizontal",
+  START: "Início da zona",
+  END: "Fim da zona"
 };
 
 const DRAWING_TOOLS: readonly CadTool[] = [
@@ -71,11 +91,17 @@ const format = (value: number | null, digits = 2): string => value === null
   ? "—"
   : new Intl.NumberFormat("pt-BR", { maximumFractionDigits: digits }).format(value);
 
+const isFormTarget = (target: EventTarget | null): boolean =>
+  target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+
 export function CadGeometryPanel({
   ownerId,
   projectId,
   projectName,
   document: model,
+  zones,
+  baseRevisionId,
+  baseInputHash,
   onChange,
   onApplyEnvelope
 }: Props) {
@@ -86,8 +112,11 @@ export function CadGeometryPanel({
   const [tool, setTool] = useState<CadTool>("SELECT");
   const [draftPoints, setDraftPoints] = useState<CadPoint[]>([]);
   const [calibrationPoints, setCalibrationPoints] = useState<CadPoint[]>([]);
+  const [axisPoints, setAxisPoints] = useState<CadPoint[]>([]);
   const [knownDistanceMm, setKnownDistanceMm] = useState(10_000);
   const [depthMm, setDepthMm] = useState(1_400);
+  const [selectedZoneId, setSelectedZoneId] = useState(zones[0]?.id ?? "");
+  const [depthPosition, setDepthPosition] = useState<CadDepthPosition>("UNIFORM");
   const [selectedPathId, setSelectedPathId] = useState<string | null>(null);
   const [selectedDepthId, setSelectedDepthId] = useState<string | null>(null);
   const [dragTarget, setDragTarget] = useState<DragTarget | null>(null);
@@ -96,11 +125,22 @@ export function CadGeometryPanel({
   const [backgroundMime, setBackgroundMime] = useState<string | null>(null);
   const [notice, setNotice] = useState("Importe a planta e calibre uma medida conhecida antes de desenhar.");
   const measurements = useMemo(() => measureCadGeometry(model), [model]);
+  const validationErrors = useMemo(() => validateCadGeometry(model), [model]);
   const selectedPath = model.paths.find((path) => path.id === selectedPathId) ?? null;
+  const boundaryCount = model.paths.filter((path) => path.role === "BOUNDARY").length;
 
   useEffect(() => {
-    saveCadDraft(ownerId, projectId, model);
-  }, [model, ownerId, projectId]);
+    if (zones.length === 0) {
+      setSelectedZoneId("");
+      return;
+    }
+    if (!zones.some((zone) => zone.id === selectedZoneId)) setSelectedZoneId(zones[0]!.id);
+  }, [selectedZoneId, zones]);
+
+  useEffect(() => {
+    const saved = saveCadDraft(ownerId, projectId, model, { baseRevisionId, baseInputHash });
+    if (!saved) setNotice("Não foi possível salvar o rascunho CAD neste navegador. Exporte o DXF antes de sair.");
+  }, [baseInputHash, baseRevisionId, model, ownerId, projectId]);
 
   useEffect(() => () => {
     if (backgroundUrlRef.current) URL.revokeObjectURL(backgroundUrlRef.current);
@@ -108,9 +148,11 @@ export function CadGeometryPanel({
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
+      if (isFormTarget(event.target)) return;
       if (event.key === "Escape") {
         setDraftPoints([]);
         setCalibrationPoints([]);
+        setAxisPoints([]);
         setSelectedPathId(null);
         setSelectedDepthId(null);
       }
@@ -159,18 +201,52 @@ export function CadGeometryPanel({
       return;
     }
 
+    if (tool === "AXIS") {
+      const next = [...axisPoints, nextPoint];
+      if (next.length === 1) {
+        setAxisPoints(next);
+        setNotice("Clique no segundo ponto, no sentido longitudinal da piscina.");
+        return;
+      }
+      try {
+        update(setCadLongitudinalAxis(model, next[0]!, next[1]!));
+        setNotice("Eixo longitudinal definido. O comprimento e a largura agora são medidos nesse sistema.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Não foi possível definir o eixo longitudinal.");
+      }
+      setAxisPoints([]);
+      setTool("SELECT");
+      return;
+    }
+
     if (tool === "DEPTH") {
+      if (boundaryCount !== 1) {
+        setNotice("Conclua um único contorno externo antes de inserir profundidades.");
+        return;
+      }
+      if (!isCadPointInsideBoundary(model, nextPoint)) {
+        setNotice("A cota de profundidade deve ser inserida dentro do contorno da piscina.");
+        return;
+      }
+      const zone = zones.find((item) => item.id === selectedZoneId);
+      if (!zone) {
+        setNotice("Selecione a zona paramétrica correspondente a esta cota.");
+        return;
+      }
       const index = model.depthMarkers.length + 1;
       update({
         ...model,
+        version: "cad-2d-1.1.0",
         depthMarkers: [...model.depthMarkers, {
           id: crypto.randomUUID(),
-          label: `Cota ${index}`,
+          label: `Cota ${index} · ${zone.label}`,
           point: nextPoint,
-          depthMm
+          depthMm,
+          zoneId: zone.id,
+          zonePosition: depthPosition
         }]
       });
-      setNotice(`Profundidade de ${depthMm.toFixed(0)} mm inserida.`);
+      setNotice(`${zone.label}: profundidade de ${depthMm.toFixed(0)} mm vinculada a “${DEPTH_POSITION_LABEL[depthPosition]}”.`);
       return;
     }
 
@@ -180,6 +256,12 @@ export function CadGeometryPanel({
   function finishPath() {
     if (!isDrawingTool(tool)) return;
     const role = pathRole(tool);
+    if (role === "BOUNDARY" && boundaryCount > 0) {
+      setNotice("Esta fase aceita um único contorno externo. Use linhas de quebra para praia, degrau e regiões internas.");
+      setDraftPoints([]);
+      setTool("SELECT");
+      return;
+    }
     const minimum = role === "BOUNDARY" ? 3 : 2;
     if (draftPoints.length < minimum) {
       setNotice(role === "BOUNDARY"
@@ -196,7 +278,17 @@ export function CadGeometryPanel({
       closed: role === "BOUNDARY",
       points: draftPoints
     };
-    update({ ...model, paths: [...model.paths, path] });
+    const nextDocument: CadGeometryDocument = {
+      ...model,
+      version: "cad-2d-1.1.0",
+      paths: [...model.paths, path]
+    };
+    const errors = validateCadGeometry(nextDocument);
+    if (errors.length > 0) {
+      setNotice(errors[0]!);
+      return;
+    }
+    update(nextDocument);
     setDraftPoints([]);
     setSelectedPathId(path.id);
     setTool("SELECT");
@@ -248,14 +340,21 @@ export function CadGeometryPanel({
   }
 
   function chooseTool(nextTool: CadTool) {
+    if ((nextTool === "BOUNDARY_LINE" || nextTool === "BOUNDARY_CURVE") && boundaryCount > 0) {
+      setNotice("Já existe um contorno externo. Edite seus nós ou exclua-o antes de criar outro.");
+      return;
+    }
     setTool(nextTool);
     setDraftPoints([]);
     setCalibrationPoints([]);
+    setAxisPoints([]);
     setSelectedPathId(null);
     setSelectedDepthId(null);
     setNotice(nextTool === "CALIBRATE"
       ? "Clique nos dois extremos da medida conhecida."
-      : `${TOOL_LABEL[nextTool]} ativo.`);
+      : nextTool === "AXIS"
+        ? "Clique em dois pontos no sentido longitudinal da piscina."
+        : `${TOOL_LABEL[nextTool]} ativo.`);
   }
 
   function importBackground(event: ChangeEvent<HTMLInputElement>) {
@@ -268,6 +367,7 @@ export function CadGeometryPanel({
     setBackgroundMime(file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/*"));
     update({
       ...model,
+      version: "cad-2d-1.1.0",
       background: {
         fileName: file.name,
         mimeType: file.type || "application/pdf",
@@ -293,10 +393,12 @@ export function CadGeometryPanel({
   }
 
   function clearGeometry() {
-    if (!window.confirm("Limpar contornos, linhas de quebra, cotas e calibração deste desenho?")) return;
+    if (!window.confirm("Limpar contorno, linhas de quebra, cotas, eixo e calibração deste desenho?")) return;
     const empty = createEmptyCadGeometryDocument();
     update(model.background ? { ...empty, background: model.background } : empty);
     setDraftPoints([]);
+    setCalibrationPoints([]);
+    setAxisPoints([]);
     setSelectedPathId(null);
     setSelectedDepthId(null);
     setNotice("Geometria CAD limpa.");
@@ -312,18 +414,26 @@ export function CadGeometryPanel({
   }
 
   function applyEnvelope() {
-    if (!measurements.envelopeLengthMm || !measurements.envelopeWidthMm) {
-      setNotice("Calibre e conclua um contorno antes de aplicar o envelope.");
+    if (!measurements.longitudinalLengthMm || !measurements.transverseWidthMm) {
+      setNotice("Calibre, conclua o contorno e defina o eixo longitudinal antes de aplicar as medidas.");
       return;
     }
+    if (validationErrors.length > 0) {
+      setNotice(validationErrors[0]!);
+      return;
+    }
+    const associated = model.depthMarkers.flatMap((marker) => marker.zoneId && marker.zonePosition
+      ? [{ zoneId: marker.zoneId, position: marker.zonePosition, depthMm: marker.depthMm }]
+      : []);
+    const legacySingleZone = associated.length === 0 && zones.length === 1 && measurements.maximumDepthMm !== null
+      ? [{ zoneId: zones[0]!.id, position: "UNIFORM" as const, depthMm: measurements.maximumDepthMm }]
+      : [];
     onApplyEnvelope({
-      lengthMm: measurements.envelopeLengthMm,
-      widthMm: measurements.envelopeWidthMm,
-      ...(measurements.maximumDepthMm !== null
-        ? { maximumDepthMm: measurements.maximumDepthMm }
-        : {})
+      lengthMm: measurements.longitudinalLengthMm,
+      widthMm: measurements.transverseWidthMm,
+      zoneDepths: [...associated, ...legacySingleZone]
     });
-    setNotice("Envelope alinhado aos eixos aplicado ao modelo paramétrico. Confira as zonas de profundidade.");
+    setNotice("Dimensões orientadas e cotas vinculadas aplicadas ao modelo paramétrico. Confira as zonas antes de calcular.");
   }
 
   const draftCurve: CadPathCurve = isDrawingTool(tool) ? pathCurve(tool) : "POLYLINE";
@@ -336,6 +446,9 @@ export function CadGeometryPanel({
       <div className="cad-header-actions">
         <span className={measurements.calibrated ? "cad-badge calibrated" : "cad-badge"}>
           {measurements.calibrated ? "CALIBRADO" : "SEM ESCALA"}
+        </span>
+        <span className={measurements.axisDefined ? "cad-badge calibrated" : "cad-badge"}>
+          {measurements.axisDefined ? "EIXO DEFINIDO" : "SEM EIXO"}
         </span>
         <button type="button" className="secondary" onClick={() => setExpanded((current) => !current)}>
           {expanded ? "Recolher" : "Abrir CAD"}
@@ -360,6 +473,8 @@ export function CadGeometryPanel({
       <div className="cad-settings">
         <label>Medida real <span><input aria-label="Distância real de calibração mm" type="number" min="1" value={knownDistanceMm} onChange={(event) => setKnownDistanceMm(event.currentTarget.valueAsNumber)} /> mm</span></label>
         <label>Profundidade <span><input aria-label="Profundidade a inserir mm" type="number" min="0" value={depthMm} onChange={(event) => setDepthMm(event.currentTarget.valueAsNumber)} /> mm</span></label>
+        <label>Zona <select aria-label="Zona da profundidade" value={selectedZoneId} onChange={(event) => setSelectedZoneId(event.currentTarget.value)}>{zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.label}</option>)}</select></label>
+        <label>Posição <select aria-label="Posição da profundidade" value={depthPosition} onChange={(event) => setDepthPosition(event.currentTarget.value as CadDepthPosition)}>{(Object.keys(DEPTH_POSITION_LABEL) as CadDepthPosition[]).map((position) => <option key={position} value={position}>{DEPTH_POSITION_LABEL[position]}</option>)}</select></label>
         <label>Zoom <span><input aria-label="Zoom do CAD" type="range" min="0.5" max="2.5" step="0.1" value={zoom} onChange={(event) => setZoom(event.currentTarget.valueAsNumber)} /> {Math.round(zoom * 100)}%</span></label>
         <label>Fundo <span><input aria-label="Opacidade do fundo" type="range" min="0.15" max="1" step="0.05" disabled={!model.background} value={model.background?.opacity ?? 0.72} onChange={(event) => setBackgroundOpacity(event.currentTarget.valueAsNumber)} /></span></label>
         {model.background && <button type="button" className="text-button" onClick={removeBackground}>Remover fundo</button>}
@@ -367,6 +482,7 @@ export function CadGeometryPanel({
       {model.background && !backgroundUrl && <p className="cad-background-warning">
         A referência “{model.background.fileName}” foi salva, mas o arquivo não é enviado ao banco. Reimporte-o nesta sessão para vê-lo ao fundo.
       </p>}
+      {validationErrors.length > 0 && <div className="cad-validation" role="alert"><strong>Corrija a geometria antes de aplicar ou exportar:</strong><ul>{validationErrors.map((message) => <li key={message}>{message}</li>)}</ul></div>}
       <div className="cad-viewport">
         <div className="cad-sheet" style={{ width: model.canvasWidth * zoom, height: model.canvasHeight * zoom }}>
           {backgroundUrl && backgroundMime?.includes("pdf") && <object
@@ -388,7 +504,6 @@ export function CadGeometryPanel({
             viewBox={`0 0 ${model.canvasWidth} ${model.canvasHeight}`}
             style={{ cursor }}
             onClick={handleCanvasClick}
-            onDoubleClick={finishPath}
             aria-label="Prancheta CAD 2D"
           >
             <defs><pattern id="cad-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor" strokeWidth="0.45" /></pattern></defs>
@@ -426,7 +541,14 @@ export function CadGeometryPanel({
               <circle cx={model.calibration.pointB.x} cy={model.calibration.pointB.y} r="5" />
               <text x={(model.calibration.pointA.x + model.calibration.pointB.x) / 2} y={(model.calibration.pointA.y + model.calibration.pointB.y) / 2 - 8}>{model.calibration.knownDistanceMm.toFixed(0)} mm</text>
             </g>}
-            {calibrationPoints.map((calibrationPoint, index) => <circle key={index} className="cad-calibration-point" cx={calibrationPoint.x} cy={calibrationPoint.y} r="6" />)}
+            {model.longitudinalAxis && <g className="cad-axis">
+              <line x1={model.longitudinalAxis.pointA.x} y1={model.longitudinalAxis.pointA.y} x2={model.longitudinalAxis.pointB.x} y2={model.longitudinalAxis.pointB.y} />
+              <circle cx={model.longitudinalAxis.pointA.x} cy={model.longitudinalAxis.pointA.y} r="5" />
+              <circle cx={model.longitudinalAxis.pointB.x} cy={model.longitudinalAxis.pointB.y} r="5" />
+              <text x={(model.longitudinalAxis.pointA.x + model.longitudinalAxis.pointB.x) / 2} y={(model.longitudinalAxis.pointA.y + model.longitudinalAxis.pointB.y) / 2 - 8}>EIXO LONGITUDINAL</text>
+            </g>}
+            {calibrationPoints.map((calibrationPoint, index) => <circle key={`cal-${index}`} className="cad-calibration-point" cx={calibrationPoint.x} cy={calibrationPoint.y} r="6" />)}
+            {axisPoints.map((axisPoint, index) => <circle key={`axis-${index}`} className="cad-axis-point" cx={axisPoint.x} cy={axisPoint.y} r="6" />)}
             {selectedPath?.points.map((pathPoint, index) => <circle
               key={index}
               className="cad-node"
@@ -445,17 +567,17 @@ export function CadGeometryPanel({
           <article><small>Área interna</small><strong>{format(measurements.boundaryAreaM2)} m²</strong></article>
           <article><small>Perímetro</small><strong>{format(measurements.boundaryPerimeterM)} m</strong></article>
           <article><small>Linhas de quebra</small><strong>{format(measurements.breaklineLengthM)} m</strong></article>
-          <article><small>Envelope</small><strong>{format(measurements.envelopeLengthMm, 0)} × {format(measurements.envelopeWidthMm, 0)} mm</strong></article>
-          <article><small>Profundidade máxima</small><strong>{format(measurements.maximumDepthMm, 0)} mm</strong></article>
+          <article><small>Comprimento × largura</small><strong>{format(measurements.longitudinalLengthMm, 0)} × {format(measurements.transverseWidthMm, 0)} mm</strong></article>
+          <article><small>Profundidade máxima válida</small><strong>{format(measurements.maximumDepthMm, 0)} mm</strong></article>
         </div>
         <div className="cad-actions">
-          <button type="button" className="secondary" onClick={applyEnvelope} disabled={!measurements.calibrated || measurements.boundaryCount === 0}>Aplicar envelope ao cálculo</button>
-          <button type="button" className="secondary" onClick={exportDxf} disabled={!measurements.calibrated || model.paths.length === 0}>Exportar DXF</button>
+          <button type="button" className="secondary" onClick={applyEnvelope} disabled={!measurements.calibrated || !measurements.axisDefined || measurements.boundaryCount !== 1 || validationErrors.length > 0}>Aplicar ao cálculo</button>
+          <button type="button" className="secondary" onClick={exportDxf} disabled={!measurements.calibrated || model.paths.length === 0 || validationErrors.length > 0}>Exportar DXF</button>
           <button type="button" className="text-button danger-text" onClick={clearGeometry}>Limpar CAD</button>
         </div>
       </div>
       <p className="cad-notice" aria-live="polite">{notice}</p>
-      <p className="cad-disclaimer">O CAD registra a geometria real. O cálculo estrutural ainda usa o modelo paramétrico equivalente; curvas e regiões deverão ser discretizadas na fase de malha estrutural.</p>
+      <p className="cad-disclaimer">O CAD registra a geometria real. O cálculo estrutural usa as dimensões orientadas e as cotas explicitamente vinculadas às zonas; curvas e regiões ainda serão discretizadas na fase de malha estrutural.</p>
     </>}
   </section>;
 }
