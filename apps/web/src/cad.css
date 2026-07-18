@@ -1,7 +1,7 @@
 .cad-panel{border:1px solid var(--line);background:var(--panel);margin-bottom:12px;display:flex;flex-direction:column;min-width:0}
 .cad-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 10px;border-bottom:1px solid var(--line)}
 .cad-header h2{font-size:12px;letter-spacing:.1em;text-transform:uppercase;margin:0}
-.cad-header-actions{display:flex;align-items:center;gap:8px}
+.cad-header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .cad-badge{font:10px var(--mono);border:1px solid var(--review);color:var(--review);padding:3px 7px}
 .cad-badge.calibrated{border-color:var(--pass);color:var(--pass)}
 .cad-toolbar{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:7px 8px;border-bottom:1px solid var(--line-soft);background:var(--deep)}
@@ -14,9 +14,14 @@
 .cad-settings{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:7px 9px;border-bottom:1px solid var(--line-soft);font-size:10px;color:var(--muted)}
 .cad-settings label{display:flex;align-items:center;gap:6px}
 .cad-settings span{display:flex;align-items:center;gap:4px;color:var(--faint);font-family:var(--mono)}
-.cad-settings input[type=number]{width:86px;border:1px solid var(--line);background:var(--field);padding:4px 5px;color:var(--ink);font-family:var(--mono)}
+.cad-settings input[type=number],.cad-settings select{border:1px solid var(--line);background:var(--field);padding:4px 5px;color:var(--ink);font-family:var(--mono);font-size:10px}
+.cad-settings input[type=number]{width:86px}
+.cad-settings select{max-width:170px}
 .cad-settings input[type=range]{width:96px}
 .cad-background-warning{margin:0;padding:6px 9px;background:#2a2416;color:#d8bd7d;border-bottom:1px solid #6b5626;font:10px var(--mono)}
+.cad-validation{padding:8px 10px;background:#321b1b;color:#ffb8b2;border-bottom:1px solid #73342f;font:10px/1.45 var(--mono)}
+.cad-validation strong{display:block;margin-bottom:4px}
+.cad-validation ul{margin:0;padding-left:18px}
 .cad-viewport{overflow:auto;max-height:72vh;background:#0f1215;padding:12px}
 .cad-sheet{position:relative;min-width:600px;min-height:380px;background:#e9ecef;box-shadow:0 0 0 1px #3c434c;overflow:hidden}
 .cad-background{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;background:#fff;border:0}
@@ -31,10 +36,12 @@
 .cad-node{fill:#fff;stroke:#d8352a;stroke-width:2;vector-effect:non-scaling-stroke;cursor:move}
 .cad-depth circle{fill:#fff;stroke:#225c91;stroke-width:2;vector-effect:non-scaling-stroke}
 .cad-depth path{stroke:#225c91;stroke-width:1.4;vector-effect:non-scaling-stroke}
-.cad-depth text,.cad-calibration text{font:14px var(--mono);fill:#102d3b;paint-order:stroke;stroke:#fff;stroke-width:4;stroke-linejoin:round}
+.cad-depth text,.cad-calibration text,.cad-axis text{font:14px var(--mono);fill:#102d3b;paint-order:stroke;stroke:#fff;stroke-width:4;stroke-linejoin:round}
 .cad-depth.selected circle{stroke:#d8352a;fill:#ffd8d5}
 .cad-calibration line{stroke:#7f52ff;stroke-width:2;stroke-dasharray:7 4;vector-effect:non-scaling-stroke}
 .cad-calibration circle,.cad-calibration-point{fill:#fff;stroke:#7f52ff;stroke-width:2;vector-effect:non-scaling-stroke}
+.cad-axis line{stroke:#d8352a;stroke-width:2.4;stroke-dasharray:12 5;vector-effect:non-scaling-stroke}
+.cad-axis circle,.cad-axis-point{fill:#fff;stroke:#d8352a;stroke-width:2;vector-effect:non-scaling-stroke}
 .cad-footer{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding:8px 9px;border-top:1px solid var(--line)}
 .cad-metrics{display:grid;grid-template-columns:repeat(5,minmax(100px,1fr));gap:6px;flex:1}
 .cad-metrics article{border:1px solid var(--line-soft);background:var(--deep);padding:6px 8px}
