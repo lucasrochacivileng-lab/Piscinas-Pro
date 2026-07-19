@@ -123,7 +123,6 @@ export function App() {
   async function selectProject(project: ProjectRecord) {
     if (!repository || !user) return;
     setActiveProject(project);
-    setWorkspaceModule("model");
     setError(null);
     try {
       const records = await repository.listRevisions(project.id);
@@ -138,6 +137,7 @@ export function App() {
       setActiveRevision(latest ?? null);
       setEditorInput({ ...normalized, cadGeometry: draft ?? normalized.cadGeometry ?? createEmptyCadGeometryDocument() });
       setResult(latest?.result ?? null);
+      setWorkspaceModule(latest?.result ? "results" : "model");
     } catch (reason) {
       await handleFailure("repository_error", "revision_list_failed", reason, "Falha ao carregar revisões.");
     }
@@ -328,7 +328,7 @@ export function App() {
           <p>Crie ou selecione um projeto no navegador à esquerda para carregar o modelo estrutural, geotécnico, normativo e as revisões imutáveis.</p>
           <div className="welcome-features"><span>Motor determinístico</span><span>CAD 2D calibrado</span><span>SPT por camadas</span><span>Histórico SHA-256</span></div>
         </div></section> : <>
-          <section className="project-header"><div className="project-path"><span>PROJETO</span><b>/</b><strong>{activeProject.name}</strong><b>/</b><span>{moduleTitle.toUpperCase()}</span><small>{activeProject.location || "Local não informado"}</small></div><span className="project-state">{activeProject.status === "calculated" ? "Modelo calculado" : "Modelo em edição"}</span></section>
+          <section className="project-header"><div className="project-path"><span>PROJETO</span><b>/</b><h1>{activeProject.name}</h1><b>/</b><span>{moduleTitle.toUpperCase()}</span><small>{activeProject.location || "Local não informado"}</small></div><span className="project-state">{activeProject.status === "calculated" ? "Modelo calculado" : "Modelo em edição"}</span></section>
           {cadDraftConflict && <div className="error-banner" role="alert">
             <strong>Rascunho CAD baseado em revisão anterior encontrado.</strong>
             <p>A revisão mais nova foi mantida. Restaure o rascunho somente para reaproveitar conscientemente aquela geometria.</p>

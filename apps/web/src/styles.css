@@ -260,7 +260,7 @@ summary{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.
 
 .project-header{height:37px;margin:0;border:0;border-bottom:1px solid var(--line);background:#1e2228;padding:0 11px}
 .project-path{min-width:0;display:flex;align-items:center;gap:8px;font:9px var(--mono);color:#68727d;white-space:nowrap}
-.project-path strong{color:#d3d9df;font-size:10px;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.project-path h1{color:#d3d9df;font:700 10px var(--mono);max-width:260px;overflow:hidden;text-overflow:ellipsis;margin:0}
 .project-path b{color:#444c55;font-weight:400}
 .project-path small{margin-left:6px;padding-left:12px;border-left:1px solid #353c44;color:#77818c}
 .project-state{font-size:8px;padding:2px 7px;background:#182b28}
