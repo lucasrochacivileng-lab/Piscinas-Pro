@@ -35,22 +35,13 @@ fi
 base=${LOCALAPPDATA:-${TMPDIR:-/tmp}}
 work="$base/poolstruct/prepush"
 mirror="$work/tree"
-lock_marker="$work/lock-hash"
 
 echo "pre-push: node_modules indisponivel aqui; validando em $mirror"
+rm -rf "$mirror" || fail
 mkdir -p "$mirror" || fail
-
-# Limpa a copia anterior preservando node_modules para nao reinstalar sempre.
-find "$mirror" -mindepth 1 -maxdepth 1 ! -name node_modules -exec rm -rf {} + || fail
 git archive HEAD | tar -x -C "$mirror" || fail
 
-lock_hash=$(git hash-object package-lock.json)
-if [ ! -x "$mirror/node_modules/.bin/tsc" ] ||
-   [ ! -f "$lock_marker" ] ||
-   [ "$(cat "$lock_marker")" != "$lock_hash" ]; then
-  echo "pre-push: instalando dependencias na copia de validacao"
-  (cd "$mirror" && npm ci --no-audit --no-fund) || fail
-  printf '%s' "$lock_hash" > "$lock_marker"
-fi
+echo "pre-push: instalando dependencias na copia limpa"
+(cd "$mirror" && npm ci --no-audit --no-fund) || fail
 
 (cd "$mirror" && npm run check) || fail
