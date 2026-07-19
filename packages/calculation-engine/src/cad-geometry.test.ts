@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCadGeometryDxf,
   calibrateCadGeometry,
+  compareCadWithParametricGeometry,
   createEmptyCadGeometryDocument,
   isCadPointInsideBoundary,
   measureCadGeometry,
@@ -175,5 +176,76 @@ describe("CAD geometry", () => {
       expect(normalized?.background?.fileName).toBe("planta.pdf");
       expect(normalized?.background?.sha256).toBeUndefined();
     }
+  });
+});
+
+describe("concordância entre CAD e modelo paramétrico", () => {
+  const applied = () => setCadLongitudinalAxis({
+    ...calibrateCadGeometry(createEmptyCadGeometryDocument(), { x: 100, y: 100 }, { x: 500, y: 100 }, 8_000),
+    paths: [rectangle],
+    depthMarkers: [{
+      id: "d1", label: "Fundo", point: { x: 300, y: 200 },
+      depthMm: 1_400, zoneId: "main", zonePosition: "UNIFORM" as const
+    }]
+  }, { x: 100, y: 200 }, { x: 500, y: 200 });
+
+  const zones = [{ id: "main", waterDepthMm: 1_400 }];
+
+  it("aprova quando o desenho corresponde ao que foi calculado", () => {
+    const agreement = compareCadWithParametricGeometry(applied(), {
+      internalLengthMm: 8_000, internalWidthMm: 4_000, depthZones: zones
+    });
+    expect(agreement.comparable).toBe(true);
+    expect(agreement.agrees).toBe(true);
+    expect(agreement.depthMismatches).toEqual([]);
+  });
+
+  it("reprova quando o desenho foi editado depois de aplicar ao cálculo", () => {
+    const agreement = compareCadWithParametricGeometry(applied(), {
+      internalLengthMm: 7_000, internalWidthMm: 4_000, depthZones: zones
+    });
+    expect(agreement.agrees).toBe(false);
+    expect(agreement.lengthDeltaMm).toBeCloseTo(1_000, 6);
+    expect(agreement.reason).toContain("comprimento difere em 1000 mm");
+  });
+
+  it("acusa cota de zona divergente", () => {
+    const agreement = compareCadWithParametricGeometry(applied(), {
+      internalLengthMm: 8_000, internalWidthMm: 4_000,
+      depthZones: [{ id: "main", waterDepthMm: 1_200 }]
+    });
+    expect(agreement.agrees).toBe(false);
+    expect(agreement.depthMismatches).toEqual([{ zoneId: "main", markerDepthMm: 1_400, zoneDepthMm: 1_200 }]);
+  });
+
+  it("ignora marcadores sem zona associada", () => {
+    const document = applied();
+    const solto = {
+      ...document,
+      depthMarkers: [...document.depthMarkers, { id: "d2", label: "Solto", point: { x: 200, y: 150 }, depthMm: 9_999 }]
+    };
+    expect(compareCadWithParametricGeometry(solto, {
+      internalLengthMm: 8_000, internalWidthMm: 4_000, depthZones: zones
+    }).agrees).toBe(true);
+  });
+
+  it("tolera o arredondamento de milímetro do \"Aplicar ao cálculo\"", () => {
+    const agreement = compareCadWithParametricGeometry(applied(), {
+      internalLengthMm: 7_999, internalWidthMm: 4_001, depthZones: zones
+    });
+    expect(agreement.agrees).toBe(true);
+  });
+
+  it("não compara desenho sem calibração, sem eixo ou com dois contornos", () => {
+    const semCalibracao = { ...createEmptyCadGeometryDocument(), paths: [rectangle] };
+    expect(compareCadWithParametricGeometry(semCalibracao, { internalLengthMm: 8_000, internalWidthMm: 4_000 }).comparable).toBe(false);
+
+    const semEixo = { ...calibrateCadGeometry(createEmptyCadGeometryDocument(), { x: 100, y: 100 }, { x: 500, y: 100 }, 8_000), paths: [rectangle] };
+    expect(compareCadWithParametricGeometry(semEixo, { internalLengthMm: 8_000, internalWidthMm: 4_000 }).reason).toContain("eixo longitudinal");
+
+    const doisContornos = { ...applied(), paths: [rectangle, { ...rectangle, id: "outro" }] };
+    expect(compareCadWithParametricGeometry(doisContornos, { internalLengthMm: 8_000, internalWidthMm: 4_000 }).reason).toContain("2 contorno(s)");
+
+    expect(compareCadWithParametricGeometry(undefined, { internalLengthMm: 8_000, internalWidthMm: 4_000 }).comparable).toBe(false);
   });
 });

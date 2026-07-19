@@ -1,4 +1,8 @@
-import { hasCadGeometryContent, type CadGeometryDocument } from "./cad-geometry.js";
+import {
+  compareCadWithParametricGeometry,
+  hasCadGeometryContent,
+  type CadGeometryDocument
+} from "./cad-geometry.js";
 import type { EngineeringCheck } from "./engineering.js";
 import {
   evaluateGeotechnicalModel,
@@ -80,10 +84,20 @@ export function runIntegratedDesign(input: IntegratedDesignInput): IntegratedDes
       ? `Perfil normativo ${profile.id} v${profile.version} selecionado.`
       : `Perfil acadêmico ${profile.id} v${profile.version}; não liberar emissão executiva.`
   };
+  const cadAgreement = compareCadWithParametricGeometry(input.cadGeometry, input.geometry);
+  const cadAgreementCheck: EngineeringCheck = {
+    id: "cad-matches-parametric-model",
+    status: cadAgreement.agrees ? "PASS" : cadAgreement.comparable ? "FAIL" : "REQUIRES_REVIEW",
+    demand: cadAgreement.lengthDeltaMm === null ? 0 : Math.abs(cadAgreement.lengthDeltaMm),
+    resistance: 1,
+    unit: "mm",
+    message: cadAgreement.reason
+  };
   const checks = [
     ...structural.checks,
     ...geotechnical.checks,
     ...masonryMaterials.checks,
+    ...(hasCadGeometryContent(input.cadGeometry) ? [cadAgreementCheck] : []),
     profileCheck
   ];
 
@@ -105,8 +119,9 @@ export function runIntegratedDesign(input: IntegratedDesignInput): IntegratedDes
       ...structural.warnings,
       ...geotechnical.warnings,
       ...masonryMaterials.warnings,
-      ...(hasCadGeometryContent(input.cadGeometry)
-        ? ["Geometria CAD vinculada à revisão; confirmar a equivalência entre o desenho vetorial e o modelo estrutural paramétrico."]
+      ...(hasCadGeometryContent(input.cadGeometry) && !cadAgreement.agrees ? [cadAgreement.reason] : []),
+      ...(cadAgreement.agrees
+        ? ["O desenho vetorial confere com as dimensões calculadas, mas o modelo estrutural continua sendo o paramétrico equivalente: curvas do contorno não são discretizadas em painéis."]
         : []),
       "Perfil normativo e dados de ensaio devem permanecer vinculados à revisão do projeto."
     ]

@@ -539,3 +539,86 @@ export function buildCadGeometryDxf(document: CadGeometryDocument, title = "POOL
     "0", "SECTION", "2", "ENTITIES", entities.join("\n"), "0", "ENDSEC", "0", "EOF", ""
   ].join("\n");
 }
+
+/**
+ * Concordancia entre o desenho vetorial e o modelo parametrico que foi de fato
+ * calculado. "Aplicar ao calculo" e um empurrao pontual: nada impede que o CAD
+ * seja editado depois, e a partir dai o desenho anexado a revisao deixa de
+ * corresponder ao que o motor dimensionou.
+ */
+export interface CadModelAgreement {
+  /** Falso quando o CAD ainda nao permite comparacao (sem calibracao, eixo ou contorno unico). */
+  readonly comparable: boolean;
+  readonly lengthDeltaMm: number | null;
+  readonly widthDeltaMm: number | null;
+  readonly depthMismatches: readonly {
+    readonly zoneId: string;
+    readonly markerDepthMm: number;
+    readonly zoneDepthMm: number;
+  }[];
+  readonly agrees: boolean;
+  readonly reason: string;
+}
+
+/** Tolerancia de 1 mm: "Aplicar ao calculo" arredonda as medidas para inteiro. */
+const CAD_AGREEMENT_TOLERANCE_MM = 1;
+
+export function compareCadWithParametricGeometry(
+  document: CadGeometryDocument | undefined,
+  geometry: {
+    readonly internalLengthMm: number;
+    readonly internalWidthMm: number;
+    readonly depthZones?: readonly { readonly id: string; readonly waterDepthMm: number }[];
+  }
+): CadModelAgreement {
+  const absent = (reason: string): CadModelAgreement =>
+    ({ comparable: false, lengthDeltaMm: null, widthDeltaMm: null, depthMismatches: [], agrees: false, reason });
+
+  if (!document || !hasCadGeometryContent(document)) return absent("Revisão sem geometria CAD vinculada.");
+
+  const measurements = measureCadGeometry(document);
+  if (!measurements.calibrated) return absent("Geometria CAD sem calibração de escala.");
+  if (!measurements.axisDefined) return absent("Geometria CAD sem eixo longitudinal definido.");
+  if (measurements.boundaryCount !== 1) {
+    return absent(`Geometria CAD com ${measurements.boundaryCount} contorno(s); a comparação exige exatamente um.`);
+  }
+  if (measurements.longitudinalLengthMm === null || measurements.transverseWidthMm === null) {
+    return absent("Geometria CAD sem dimensões orientadas mensuráveis.");
+  }
+
+  const lengthDeltaMm = measurements.longitudinalLengthMm - geometry.internalLengthMm;
+  const widthDeltaMm = measurements.transverseWidthMm - geometry.internalWidthMm;
+
+  // Só cotas vinculadas a uma zona sao comparaveis: marcadores soltos nao
+  // alimentam o modelo parametrico e nao devem acusar divergencia.
+  const zonesById = new Map((geometry.depthZones ?? []).map((zone) => [zone.id, zone]));
+  const depthMismatches = document.depthMarkers.flatMap((marker) => {
+    if (!marker.zoneId) return [];
+    const zone = zonesById.get(marker.zoneId);
+    if (!zone) return [];
+    return Math.abs(marker.depthMm - zone.waterDepthMm) > CAD_AGREEMENT_TOLERANCE_MM
+      ? [{ zoneId: marker.zoneId, markerDepthMm: marker.depthMm, zoneDepthMm: zone.waterDepthMm }]
+      : [];
+  });
+
+  const lengthAgrees = Math.abs(lengthDeltaMm) <= CAD_AGREEMENT_TOLERANCE_MM;
+  const widthAgrees = Math.abs(widthDeltaMm) <= CAD_AGREEMENT_TOLERANCE_MM;
+  const agrees = lengthAgrees && widthAgrees && depthMismatches.length === 0;
+
+  if (agrees) {
+    return {
+      comparable: true, lengthDeltaMm, widthDeltaMm, depthMismatches, agrees: true,
+      reason: "Desenho vetorial e modelo paramétrico calculado coincidem em comprimento, largura e cotas vinculadas."
+    };
+  }
+
+  const divergences = [
+    ...(lengthAgrees ? [] : [`comprimento difere em ${Math.round(lengthDeltaMm)} mm`]),
+    ...(widthAgrees ? [] : [`largura difere em ${Math.round(widthDeltaMm)} mm`]),
+    ...(depthMismatches.length > 0 ? [`${depthMismatches.length} cota(s) de zona divergente(s)`] : [])
+  ];
+  return {
+    comparable: true, lengthDeltaMm, widthDeltaMm, depthMismatches, agrees: false,
+    reason: `Desenho editado após o último "Aplicar ao cálculo": ${divergences.join("; ")}.`
+  };
+}
