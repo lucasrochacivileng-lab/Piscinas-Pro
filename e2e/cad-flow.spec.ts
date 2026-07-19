@@ -88,6 +88,7 @@ test("importa PDF, calibra, orienta, mede e preserva o rascunho ao abrir histór
   await page.getByRole("button", { name: "Calcular e salvar revisão" }).click();
   await expect(page.getByRole("button", { name: /R2/ })).toBeVisible();
 
+  await page.getByRole("tab", { name: /Modelo 2D/ }).click();
   await page.getByRole("button", { name: "Quebra reta", exact: true }).click();
   await canvas.click({ position: { x: 280, y: 270 } });
   await canvas.click({ position: { x: 590, y: 300 } });
@@ -96,5 +97,6 @@ test("importa PDF, calibra, orienta, mede e preserva o rascunho ao abrir histór
 
   await page.getByRole("button", { name: /R1/ }).click();
   await expect(page.getByText("REVISÃO HISTÓRICA", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: /Modelo 2D/ }).click();
   await expect(page.locator(".cad-path.breakline")).toHaveCount(1);
 });
