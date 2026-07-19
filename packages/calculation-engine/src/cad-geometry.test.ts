@@ -142,7 +142,38 @@ describe("CAD geometry", () => {
       paths: [rectangle],
       depthMarkers: []
     };
-    expect(normalizeCadGeometryDocument(legacy)?.version).toBe("cad-2d-1.1.0");
+    expect(normalizeCadGeometryDocument(legacy)?.version).toBe("cad-2d-1.2.0");
     expect(normalizeCadGeometryDocument({ ...legacy, paths: "invalid" })).toBeNull();
+  });
+
+  it("preserva o hash do fundo ao normalizar a revisão", () => {
+    const sha256 = "a".repeat(64);
+    const document = {
+      version: "cad-2d-1.2.0",
+      canvasWidth: 1200,
+      canvasHeight: 760,
+      background: { fileName: "planta.pdf", mimeType: "application/pdf", page: 1, opacity: 0.72, sha256, byteSize: 4096 },
+      paths: [rectangle],
+      depthMarkers: []
+    };
+    const normalized = normalizeCadGeometryDocument(document);
+    expect(normalized?.background?.sha256).toBe(sha256);
+    expect(normalized?.background?.byteSize).toBe(4096);
+  });
+
+  it("descarta hash de fundo malformado sem invalidar o documento", () => {
+    const base = {
+      version: "cad-2d-1.2.0",
+      canvasWidth: 1200,
+      canvasHeight: 760,
+      paths: [rectangle],
+      depthMarkers: []
+    };
+    const background = { fileName: "planta.pdf", mimeType: "application/pdf", page: 1, opacity: 0.72 };
+    for (const sha256 of ["ABC", "z".repeat(64), 42, null]) {
+      const normalized = normalizeCadGeometryDocument({ ...base, background: { ...background, sha256 } });
+      expect(normalized?.background?.fileName).toBe("planta.pdf");
+      expect(normalized?.background?.sha256).toBeUndefined();
+    }
   });
 });

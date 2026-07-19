@@ -43,10 +43,18 @@ export interface CadBackgroundReference {
   readonly mimeType: string;
   readonly page: number;
   readonly opacity: number;
+  /**
+   * SHA-256 do arquivo usado na calibracao, em hexadecimal minusculo. O arquivo
+   * em si nao vai ao banco: o hash permite provar que um reenvio e o mesmo
+   * documento sobre o qual a geometria foi tracada. Ausente em revisoes
+   * anteriores a `cad-2d-1.2.0`.
+   */
+  readonly sha256?: string;
+  readonly byteSize?: number;
 }
 
 export interface CadGeometryDocument {
-  readonly version: "cad-2d-1.0.0" | "cad-2d-1.1.0";
+  readonly version: "cad-2d-1.0.0" | "cad-2d-1.1.0" | "cad-2d-1.2.0";
   readonly canvasWidth: number;
   readonly canvasHeight: number;
   readonly calibration?: CadCalibration;
@@ -90,7 +98,7 @@ const pointFromUnknown = (value: unknown): CadPoint | null => {
 
 export function createEmptyCadGeometryDocument(): CadGeometryDocument {
   return {
-    version: "cad-2d-1.1.0",
+    version: "cad-2d-1.2.0",
     canvasWidth: 1200,
     canvasHeight: 760,
     paths: [],
@@ -169,16 +177,20 @@ export function normalizeCadGeometryDocument(value: unknown): CadGeometryDocumen
   if (candidate.background && typeof candidate.background.fileName === "string" &&
       typeof candidate.background.mimeType === "string" && isFiniteNumber(candidate.background.page) &&
       isFiniteNumber(candidate.background.opacity)) {
+    const sha256 = candidate.background.sha256;
+    const byteSize = candidate.background.byteSize;
     background = {
       fileName: candidate.background.fileName,
       mimeType: candidate.background.mimeType,
       page: candidate.background.page,
-      opacity: candidate.background.opacity
+      opacity: candidate.background.opacity,
+      ...(typeof sha256 === "string" && /^[0-9a-f]{64}$/.test(sha256) ? { sha256 } : {}),
+      ...(isFiniteNumber(byteSize) && byteSize >= 0 ? { byteSize } : {})
     };
   }
 
   return {
-    version: "cad-2d-1.1.0",
+    version: "cad-2d-1.2.0",
     canvasWidth: candidate.canvasWidth,
     canvasHeight: candidate.canvasHeight,
     ...(calibration ? { calibration } : {}),
@@ -208,7 +220,7 @@ export function calibrateCadGeometry(
   }
   return {
     ...document,
-    version: "cad-2d-1.1.0",
+    version: "cad-2d-1.2.0",
     calibration: {
       pointA,
       pointB,
@@ -225,7 +237,7 @@ export function setCadLongitudinalAxis(
   pointB: CadPoint
 ): CadGeometryDocument {
   if (distance(pointA, pointB) <= EPSILON) throw new RangeError("Os pontos do eixo longitudinal devem ser distintos.");
-  return { ...document, version: "cad-2d-1.1.0", longitudinalAxis: { pointA, pointB } };
+  return { ...document, version: "cad-2d-1.2.0", longitudinalAxis: { pointA, pointB } };
 }
 
 const quadraticPoint = (start: CadPoint, control: CadPoint, end: CadPoint, t: number): CadPoint => {

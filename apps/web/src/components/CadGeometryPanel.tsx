@@ -13,6 +13,7 @@ import {
   type CadPoint,
   type PoolDepthZoneInput
 } from "@poolstruct/calculation-engine";
+import { hashFile, loadCadBackground, saveCadBackground } from "../lib/cad-background-store";
 import {
   useEffect,
   useMemo,
@@ -145,6 +146,21 @@ export function CadGeometryPanel({
   useEffect(() => () => {
     if (backgroundUrlRef.current) URL.revokeObjectURL(backgroundUrlRef.current);
   }, []);
+
+  // Restaura o fundo guardado neste navegador quando a revisao traz o hash.
+  const backgroundHash = model.background?.sha256;
+  useEffect(() => {
+    if (!backgroundHash || backgroundUrlRef.current) return;
+    let cancelled = false;
+    void loadCadBackground(backgroundHash).then((stored) => {
+      if (cancelled || !stored) return;
+      const url = URL.createObjectURL(stored.blob);
+      backgroundUrlRef.current = url;
+      setBackgroundUrl(url);
+      setBackgroundMime(stored.mimeType);
+    });
+    return () => { cancelled = true; };
+  }, [backgroundHash]);
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -357,25 +373,46 @@ export function CadGeometryPanel({
         : `${TOOL_LABEL[nextTool]} ativo.`);
   }
 
-  function importBackground(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
+  async function importBackground(event: ChangeEvent<HTMLInputElement>) {
+    // O React anula currentTarget quando o handler retorna, e abaixo ha awaits.
+    const input = event.currentTarget;
+    const file = input.files?.[0];
     if (!file) return;
+    const sha256 = await hashFile(file);
+    const expected = model.background?.sha256;
+
+    // Reenvio de um fundo ja calibrado: recusar arquivo diferente protege a
+    // correspondencia entre o tracado salvo e o documento de origem.
+    if (expected && expected !== sha256) {
+      setNotice(
+        `“${file.name}” não é o arquivo sobre o qual esta geometria foi calibrada (SHA-256 divergente). ` +
+        "Reenvie o documento original ou remova o fundo antes de trocar de planta."
+      );
+      input.value = "";
+      return;
+    }
+
     if (backgroundUrlRef.current) URL.revokeObjectURL(backgroundUrlRef.current);
     const url = URL.createObjectURL(file);
     backgroundUrlRef.current = url;
     setBackgroundUrl(url);
     setBackgroundMime(file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/*"));
+    await saveCadBackground(sha256, file);
     update({
       ...model,
-      version: "cad-2d-1.1.0",
+      version: "cad-2d-1.2.0",
       background: {
         fileName: file.name,
         mimeType: file.type || "application/pdf",
         page: 1,
-        opacity: model.background?.opacity ?? 0.72
+        opacity: model.background?.opacity ?? 0.72,
+        sha256,
+        byteSize: file.size
       }
     });
-    setNotice(`${file.name} carregado como fundo local. Agora calibre a escala.`);
+    setNotice(expected
+      ? `${file.name} reenviado e conferido pelo SHA-256. A calibração anterior continua válida.`
+      : `${file.name} carregado como fundo local. Agora calibre a escala.`);
   }
 
   function setBackgroundOpacity(opacity: number) {
@@ -480,7 +517,9 @@ export function CadGeometryPanel({
         {model.background && <button type="button" className="text-button" onClick={removeBackground}>Remover fundo</button>}
       </div>
       {model.background && !backgroundUrl && <p className="cad-background-warning">
-        A referência “{model.background.fileName}” foi salva, mas o arquivo não é enviado ao banco. Reimporte-o nesta sessão para vê-lo ao fundo.
+        {model.background.sha256
+          ? <>A planta “{model.background.fileName}” não está guardada neste navegador. Reenvie o mesmo arquivo para vê-lo ao fundo: o SHA-256 registrado na revisão confere a identidade e recusa um documento diferente.</>
+          : <>A referência “{model.background.fileName}” foi salva antes do registro de hash. Reimporte-a nesta sessão para vê-la ao fundo e passar a conferir a identidade do arquivo.</>}
       </p>}
       {validationErrors.length > 0 && <div className="cad-validation" role="alert"><strong>Corrija a geometria antes de aplicar ou exportar:</strong><ul>{validationErrors.map((message) => <li key={message}>{message}</li>)}</ul></div>}
       <div className="cad-viewport">
