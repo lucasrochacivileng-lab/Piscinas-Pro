@@ -7,6 +7,7 @@ import {
   isCadPointInsideBoundary,
   measureCadGeometry,
   normalizeCadGeometryDocument,
+  proposeCadWallSegments,
   sampleCadPath,
   setCadLongitudinalAxis,
   validateCadGeometry
@@ -247,5 +248,59 @@ describe("concordância entre CAD e modelo paramétrico", () => {
     expect(compareCadWithParametricGeometry(doisContornos, { internalLengthMm: 8_000, internalWidthMm: 4_000 }).reason).toContain("2 contorno(s)");
 
     expect(compareCadWithParametricGeometry(undefined, { internalLengthMm: 8_000, internalWidthMm: 4_000 }).comparable).toBe(false);
+  });
+});
+
+describe("proposta de paredes a partir do contorno", () => {
+  // Retangulo de 8,00 x 4,00 m (mmPerUnit = 20 sobre 400 x 200 unidades).
+  const desenho = () => ({
+    ...calibrateCadGeometry(createEmptyCadGeometryDocument(), { x: 100, y: 100 }, { x: 500, y: 100 }, 8_000),
+    paths: [rectangle]
+  });
+
+  it("respeita a faixa h/L do metodo em todos os paineis", () => {
+    const proposta = proposeCadWallSegments(desenho(), 1_500);
+    expect(proposta.available).toBe(true);
+    expect(proposta.minimumPanelLengthMm).toBe(750);
+    expect(proposta.maximumPanelLengthMm).toBe(5_000);
+    expect(proposta.allWithinDomain).toBe(true);
+    for (const segmento of proposta.segments) {
+      expect(segmento.lengthMm).toBeLessThanOrEqual(proposta.maximumPanelLengthMm + 1e-6);
+      expect(segmento.lengthMm).toBeGreaterThanOrEqual(proposta.minimumPanelLengthMm - 1e-6);
+      expect(segmento.heightToLengthRatio).toBeLessThanOrEqual(2 + 1e-9);
+      expect(segmento.heightToLengthRatio).toBeGreaterThanOrEqual(0.3 - 1e-9);
+    }
+  });
+
+  it("quebra nos quatro cantos do retangulo", () => {
+    expect(proposeCadWallSegments(desenho(), 1_500).cornerCount).toBe(4);
+  });
+
+  it("subdivide o lado longo quando a parede e baixa", () => {
+    // h = 1,0 m -> painel maximo 3,33 m; o lado de 8 m precisa de 3 pedacos.
+    const proposta = proposeCadWallSegments(desenho(), 1_000);
+    const longos = proposta.segments.filter((s) => Math.abs(s.lengthMm - 8_000 / 3) < 1);
+    expect(longos.length).toBe(6); // dois lados de 8 m, 3 pedacos cada
+  });
+
+  it("preserva o comprimento total do contorno", () => {
+    const proposta = proposeCadWallSegments(desenho(), 1_500);
+    const total = proposta.segments.reduce((sum, s) => sum + s.lengthMm, 0);
+    expect(total).toBeCloseTo(24_000, 3); // perimetro 2*(8+4) m
+  });
+
+  it("acusa quando a parede e alta demais para o trecho desenhado", () => {
+    // h = 12 m -> painel minimo 6 m; o lado curto de 4 m nao cabe na faixa.
+    const proposta = proposeCadWallSegments(desenho(), 12_000);
+    expect(proposta.allWithinDomain).toBe(false);
+    expect(proposta.segments.some((s) => !s.withinMethodDomain)).toBe(true);
+  });
+
+  it("nao propoe sem calibracao, sem contorno unico ou sem altura", () => {
+    expect(proposeCadWallSegments({ ...createEmptyCadGeometryDocument(), paths: [rectangle] }, 1_500).reason).toContain("calibra");
+    const dois = { ...desenho(), paths: [rectangle, { ...rectangle, id: "b" }] };
+    expect(proposeCadWallSegments(dois, 1_500).reason).toContain("2 contorno(s)");
+    expect(proposeCadWallSegments(desenho(), 0).available).toBe(false);
+    expect(proposeCadWallSegments(undefined, 1_500).available).toBe(false);
   });
 });

@@ -19,6 +19,7 @@ export {
   isCadPointInsideBoundary,
   measureCadGeometry,
   normalizeCadGeometryDocument,
+  proposeCadWallSegments,
   sampleCadPath,
   setCadLongitudinalAxis,
   validateCadGeometry
@@ -35,7 +36,9 @@ export type {
   CadPath,
   CadPathCurve,
   CadPathRole,
-  CadPoint
+  CadPoint,
+  CadWallSegmentation,
+  CadWallSegmentProposal
 } from "./cad-geometry.js";
 export {
   absorptionLimitsPercent,
@@ -202,6 +205,7 @@ export type { SoilEstimateFromSPT } from "./soil.js";
 export {
   activeEarthPressureCoefficient,
   calculateWallPanelActions,
+  PANEL_RATIO_DOMAIN,
   momentCoefficientForRatio
 } from "./wall-panel.js";
 export { validateGeometry, validateProfile } from "./validation.js";

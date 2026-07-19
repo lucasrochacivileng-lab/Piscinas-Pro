@@ -3,6 +3,7 @@ import {
   createEmptyCadGeometryDocument,
   isCadPointInsideBoundary,
   measureCadGeometry,
+  proposeCadWallSegments,
   setCadLongitudinalAxis,
   validateCadGeometry,
   type CadDepthPosition,
@@ -126,6 +127,15 @@ export function CadGeometryPanel({
   const [backgroundMime, setBackgroundMime] = useState<string | null>(null);
   const [notice, setNotice] = useState("Importe a planta e calibre uma medida conhecida antes de desenhar.");
   const measurements = useMemo(() => measureCadGeometry(model), [model]);
+  // Altura de referência para o corte: a maior profundidade entre as zonas.
+  const wallHeightMm = useMemo(
+    () => zones.reduce((deepest, zone) => Math.max(deepest, zone.waterDepthMm), 0),
+    [zones]
+  );
+  const segmentation = useMemo(
+    () => proposeCadWallSegments(model, wallHeightMm),
+    [model, wallHeightMm]
+  );
   const validationErrors = useMemo(() => validateCadGeometry(model), [model]);
   const selectedPath = model.paths.find((path) => path.id === selectedPathId) ?? null;
   const boundaryCount = model.paths.filter((path) => path.role === "BOUNDARY").length;
@@ -522,6 +532,37 @@ export function CadGeometryPanel({
           : <>A referência “{model.background.fileName}” foi salva antes do registro de hash. Reimporte-a nesta sessão para vê-la ao fundo e passar a conferir a identidade do arquivo.</>}
       </p>}
       {validationErrors.length > 0 && <div className="cad-validation" role="alert"><strong>Corrija a geometria antes de aplicar ou exportar:</strong><ul>{validationErrors.map((message) => <li key={message}>{message}</li>)}</ul></div>}
+      <section className="cad-segmentation">
+        <h4>Paredes propostas a partir do contorno</h4>
+        {!segmentation.available && <p className="cad-note">{segmentation.reason}</p>}
+        {segmentation.available && <>
+          <p className="cad-note">
+            {segmentation.reason} Altura de referência {(segmentation.wallHeightMm / 1_000).toFixed(2)} m,
+            então cada painel deve medir entre {(segmentation.minimumPanelLengthMm / 1_000).toFixed(2)} m
+            e {(segmentation.maximumPanelLengthMm / 1_000).toFixed(2)} m para permanecer no domínio
+            da tabela E.2 da ABNT NBR 16868-1.
+          </p>
+          {!segmentation.allWithinDomain && <p className="cad-background-warning" role="alert">
+            Há trecho do contorno curto demais para a profundidade desta piscina: o painel resultante
+            passa de h/L = 2 e fica fora da faixa em que o método tem coeficiente tabelado.
+          </p>}
+          <table className="cad-segment-table">
+            <thead><tr><th>Painel</th><th>Comprimento</th><th>h/L</th><th>Domínio</th></tr></thead>
+            <tbody>
+              {segmentation.segments.map((segment) => <tr key={segment.id}>
+                <td>{segment.id}</td>
+                <td>{(segment.lengthMm / 1_000).toFixed(2)} m</td>
+                <td>{segment.heightToLengthRatio.toFixed(2)}</td>
+                <td>{segment.withinMethodDomain ? "OK" : "fora da faixa"}</td>
+              </tr>)}
+            </tbody>
+          </table>
+          <p className="cad-note">
+            Proposta apenas informativa: o cálculo continua usando o modelo paramétrico equivalente.
+            A curvatura do contorno é desprezada, o que é conservador.
+          </p>
+        </>}
+      </section>
       <div className="cad-viewport">
         <div className="cad-sheet" style={{ width: model.canvasWidth * zoom, height: model.canvasHeight * zoom }}>
           {backgroundUrl && backgroundMime?.includes("pdf") && <object

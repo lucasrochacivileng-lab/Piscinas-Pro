@@ -54,8 +54,15 @@ export function activeEarthPressureCoefficient(frictionAngleDegrees: number): nu
   return Math.tan(angleRadians) ** 2;
 }
 
+/**
+ * Dominio de h/L da tabela E.2 da ABNT NBR 16868-1 usada para painel apoiado em
+ * tres bordos e livre no topo. Abaixo do minimo o painel e tratado como balanco
+ * vertical; acima do maximo nao ha coeficiente tabelado e o calculo e recusado.
+ */
+export const PANEL_RATIO_DOMAIN = Object.freeze({ minimum: 0.3, maximum: 2 });
+
 export function momentCoefficientForRatio(heightToLengthRatio: number): number | null {
-  if (heightToLengthRatio < 0.3 || heightToLengthRatio > 2) return null;
+  if (heightToLengthRatio < PANEL_RATIO_DOMAIN.minimum || heightToLengthRatio > PANEL_RATIO_DOMAIN.maximum) return null;
 
   for (let index = 1; index < MOMENT_COEFFICIENTS.length; index += 1) {
     const lower = MOMENT_COEFFICIENTS[index - 1];
@@ -88,7 +95,7 @@ export function calculateWallPanelActions(
   const heightM = input.panelHeightMm / 1_000;
   const thicknessM = input.wallThicknessMm / 1_000;
   const heightToLengthRatio = heightM / lengthM;
-  const usesCantileverMethod = heightToLengthRatio < 0.3;
+  const usesCantileverMethod = heightToLengthRatio < PANEL_RATIO_DOMAIN.minimum;
   const momentCoefficient = usesCantileverMethod
     ? 1 / 6
     : momentCoefficientForRatio(heightToLengthRatio);

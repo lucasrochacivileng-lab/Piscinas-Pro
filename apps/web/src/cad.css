@@ -22,6 +22,12 @@
 .cad-validation{padding:8px 10px;background:#321b1b;color:#ffb8b2;border-bottom:1px solid #73342f;font:10px/1.45 var(--mono)}
 .cad-validation strong{display:block;margin-bottom:4px}
 .cad-validation ul{margin:0;padding-left:18px}
+.cad-segmentation{padding:8px 10px;border-bottom:1px solid #2b3138;font:10px/1.5 var(--mono);color:#c3ccd6}
+.cad-segmentation h4{margin:0 0 5px;font:11px var(--mono);color:#e6edf3;letter-spacing:.02em}
+.cad-note{margin:0 0 6px;color:#8b97a3}
+.cad-segment-table{width:100%;border-collapse:collapse;margin:4px 0 6px}
+.cad-segment-table th{text-align:left;font-weight:400;color:#8b97a3;border-bottom:1px solid #2b3138;padding:3px 6px 3px 0}
+.cad-segment-table td{padding:2px 6px 2px 0;border-bottom:1px solid #1c2126}
 .cad-viewport{overflow:auto;max-height:72vh;background:#0f1215;padding:12px}
 .cad-sheet{position:relative;min-width:600px;min-height:380px;background:#e9ecef;box-shadow:0 0 0 1px #3c434c;overflow:hidden}
 .cad-background{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;background:#fff;border:0}

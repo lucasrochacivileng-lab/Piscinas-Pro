@@ -1,3 +1,5 @@
+import { PANEL_RATIO_DOMAIN } from "./wall-panel.js";
+
 export interface CadPoint {
   readonly x: number;
   readonly y: number;
@@ -621,4 +623,138 @@ export function compareCadWithParametricGeometry(
     comparable: true, lengthDeltaMm, widthDeltaMm, depthMismatches, agrees: false,
     reason: `Desenho editado após o último "Aplicar ao cálculo": ${divergences.join("; ")}.`
   };
+}
+
+/**
+ * Proposta de corte do contorno desenhado em paineis de parede.
+ *
+ * O metodo da tabela E.2 da ABNT NBR 16868-1 so vale para painel retangular com
+ * h/L dentro de PANEL_RATIO_DOMAIN. O corte existe para que cada trecho caia
+ * nessa faixa: nao e uma discretizacao estrutural da curva, e sim a divisao do
+ * perimetro em paineis que o metodo ja sabe calcular. A curvatura real e
+ * desprezada, o que e conservador — o efeito de arco aumentaria a rigidez.
+ */
+export interface CadWallSegmentProposal {
+  readonly id: string;
+  readonly start: CadPoint;
+  readonly end: CadPoint;
+  readonly lengthMm: number;
+  readonly heightToLengthRatio: number;
+  /** Falso quando nem subdividindo o trecho cabe na faixa do metodo. */
+  readonly withinMethodDomain: boolean;
+}
+
+export interface CadWallSegmentation {
+  readonly available: boolean;
+  readonly reason: string;
+  readonly wallHeightMm: number;
+  readonly minimumPanelLengthMm: number;
+  readonly maximumPanelLengthMm: number;
+  readonly cornerCount: number;
+  readonly segments: readonly CadWallSegmentProposal[];
+  readonly allWithinDomain: boolean;
+}
+
+const DEFAULT_CORNER_ANGLE_DEGREES = 15;
+
+export function proposeCadWallSegments(
+  document: CadGeometryDocument | undefined,
+  wallHeightMm: number,
+  options: { readonly cornerAngleDegrees?: number } = {}
+): CadWallSegmentation {
+  const minimumPanelLengthMm = wallHeightMm / PANEL_RATIO_DOMAIN.maximum;
+  const maximumPanelLengthMm = wallHeightMm / PANEL_RATIO_DOMAIN.minimum;
+  const empty = (reason: string): CadWallSegmentation => ({
+    available: false, reason, wallHeightMm, minimumPanelLengthMm, maximumPanelLengthMm,
+    cornerCount: 0, segments: [], allWithinDomain: false
+  });
+
+  if (!document) return empty("Revisão sem geometria CAD vinculada.");
+  if (!(wallHeightMm > 0)) return empty("Altura de parede indisponível para propor o corte.");
+  const calibration = document.calibration;
+  if (!calibration) return empty("Geometria CAD sem calibração de escala.");
+
+  const boundaries = document.paths.filter((path) => path.role === "BOUNDARY");
+  if (boundaries.length !== 1) {
+    return empty(`Geometria CAD com ${boundaries.length} contorno(s); a proposta exige exatamente um.`);
+  }
+
+  const points = sampleCadPath(boundaries[0]!);
+  if (points.length < 3) return empty("Contorno sem pontos suficientes para propor paredes.");
+
+  // 1) Quebra nos cantos: mudanca de direcao acima do limite encerra o trecho.
+  const cornerAngle = (options.cornerAngleDegrees ?? DEFAULT_CORNER_ANGLE_DEGREES) * Math.PI / 180;
+  const runs: CadPoint[][] = [];
+  let current: CadPoint[] = [points[0]!];
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1]!;
+    const point = points[index]!;
+    current.push(point);
+    const next = points[index + 1];
+    if (!next) continue;
+    const incoming = Math.atan2(point.y - previous.y, point.x - previous.x);
+    const outgoing = Math.atan2(next.y - point.y, next.x - point.x);
+    let turn = Math.abs(outgoing - incoming);
+    if (turn > Math.PI) turn = 2 * Math.PI - turn;
+    if (turn > cornerAngle) {
+      runs.push(current);
+      current = [point];
+    }
+  }
+  if (current.length > 1) runs.push(current);
+  if (runs.length === 0) return empty("Não foi possível identificar trechos no contorno.");
+
+  // 2) Cada trecho vira 1..n paineis, o menor n que respeite o comprimento maximo.
+  const segments: CadWallSegmentProposal[] = [];
+  runs.forEach((run, runIndex) => {
+    const runLengthMm = run.slice(1).reduce(
+      (total, point, i) => total + distance(run[i]!, point) * calibration.mmPerUnit, 0
+    );
+    if (runLengthMm <= 0) return;
+
+    const count = Math.max(1, Math.ceil(runLengthMm / maximumPanelLengthMm));
+    const panelLengthMm = runLengthMm / count;
+    const ratio = wallHeightMm / panelLengthMm;
+    const withinMethodDomain = panelLengthMm >= minimumPanelLengthMm;
+
+    for (let piece = 0; piece < count; piece += 1) {
+      segments.push({
+        id: `w${runIndex + 1}-${piece + 1}`,
+        start: pointAlongPolyline(run, calibration.mmPerUnit, piece * panelLengthMm),
+        end: pointAlongPolyline(run, calibration.mmPerUnit, (piece + 1) * panelLengthMm),
+        lengthMm: panelLengthMm,
+        heightToLengthRatio: ratio,
+        withinMethodDomain
+      });
+    }
+  });
+
+  return {
+    available: segments.length > 0,
+    reason: segments.length > 0
+      ? `${segments.length} painel(is) propostos a partir de ${runs.length} trecho(s) do contorno.`
+      : "Contorno sem trechos mensuráveis.",
+    wallHeightMm,
+    minimumPanelLengthMm,
+    maximumPanelLengthMm,
+    cornerCount: runs.length,
+    segments,
+    allWithinDomain: segments.every((segment) => segment.withinMethodDomain)
+  };
+}
+
+function pointAlongPolyline(run: readonly CadPoint[], mmPerUnit: number, targetMm: number): CadPoint {
+  if (targetMm <= 0) return run[0]!;
+  let walkedMm = 0;
+  for (let index = 1; index < run.length; index += 1) {
+    const from = run[index - 1]!;
+    const to = run[index]!;
+    const edgeMm = distance(from, to) * mmPerUnit;
+    if (walkedMm + edgeMm >= targetMm) {
+      const fraction = edgeMm === 0 ? 0 : (targetMm - walkedMm) / edgeMm;
+      return { x: from.x + (to.x - from.x) * fraction, y: from.y + (to.y - from.y) * fraction };
+    }
+    walkedMm += edgeMm;
+  }
+  return run.at(-1)!;
 }
