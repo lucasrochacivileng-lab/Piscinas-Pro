@@ -17,6 +17,7 @@ import { MasonryPanel } from "./components/MasonryPanel";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ResultDashboard } from "./components/ResultDashboard";
 import { RevisionHistory } from "./components/RevisionHistory";
+import { WorkspaceNavigator } from "./components/WorkspaceNavigator";
 import {
   clearCadDraftConflict,
   loadCadDraft,
@@ -49,6 +50,8 @@ interface CadEnvelopeApplication {
   readonly widthMm: number;
   readonly zoneDepths: readonly CadZoneDepthValue[];
 }
+
+type WorkspaceModule = "model" | "drawings" | "results";
 
 const EMPTY_CAD = createEmptyCadGeometryDocument();
 
@@ -95,6 +98,7 @@ export function App() {
   const [cadDraftConflict, setCadDraftConflict] = useState<CadGeometryDocument | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ErrorNotice | null>(null);
+  const [workspaceModule, setWorkspaceModule] = useState<WorkspaceModule>("model");
 
   const handleFailure = useCallback(async (
     eventType: OperationalEventType,
@@ -119,6 +123,7 @@ export function App() {
   async function selectProject(project: ProjectRecord) {
     if (!repository || !user) return;
     setActiveProject(project);
+    setWorkspaceModule("model");
     setError(null);
     try {
       const records = await repository.listRevisions(project.id);
@@ -180,6 +185,7 @@ export function App() {
       setResult(calculation);
       setActiveRevision(revision);
       setRevisions((current) => [revision, ...current]);
+      setWorkspaceModule("results");
       await refreshProjects();
     } catch (reason) {
       await handleFailure("calculation_error", "calculation_or_save_failed", reason, "Não foi possível executar o cálculo.");
@@ -191,6 +197,7 @@ export function App() {
   function openRevision(revision: RevisionRecord) {
     setActiveRevision(revision);
     setResult(revision.result);
+    setWorkspaceModule("results");
   }
 
   function restoreCadConflict() {
@@ -266,15 +273,51 @@ export function App() {
     ? isIntegratedDesignResult(result) ? result.integrationVersion : result.engineVersion
     : null;
 
+  const depthZoneCount = editorInput.geometry.depthZones?.length ?? 0;
+  const soilLayerCount = editorInput.geotechnical.layers.length;
+  const checkCount = result?.checks.length ?? 0;
+  const moduleTitle = workspaceModule === "model" ? "Modelo 2D" : workspaceModule === "drawings" ? "Pranchas" : "Resultados";
+
   return <div className="app-shell">
     <header className="topbar">
-      <div className="brand"><div className="brand-mark">PS</div><div><strong>POOLSTRUCT</strong><small>Pré-dimensionamento estrutural de piscinas</small></div></div>
+      <div className="brand"><div className="brand-mark">PS</div><div><strong>POOLSTRUCT</strong><small>Structural Engineering Workstation</small></div></div>
+      <div className="menubar" aria-hidden="true">
+        <span>Arquivo</span><span>Projeto</span><span>Modelo</span><span>Cálculo</span><span>Resultados</span><span>Ajuda</span>
+      </div>
       <div className="account"><span>{user.email}</span>{!localMode && <button className="text-button" onClick={() => void signOut()}>Sair</button>}</div>
     </header>
+    <div className="commandbar" role="toolbar" aria-label="Comandos do projeto">
+      <div className="command-group">
+        <span className="command-group-label">AMBIENTE</span>
+        <button type="button" className={workspaceModule === "model" ? "command active" : "command"} onClick={() => setWorkspaceModule("model")} disabled={!activeProject}><i aria-hidden="true">GE</i><span>Modelo 2D</span></button>
+        <button type="button" className={workspaceModule === "drawings" ? "command active" : "command"} onClick={() => setWorkspaceModule("drawings")} disabled={!activeRevision}><i aria-hidden="true">PR</i><span>Pranchas</span></button>
+        <button type="button" className={workspaceModule === "results" ? "command active" : "command"} onClick={() => setWorkspaceModule("results")} disabled={!result}><i aria-hidden="true">RS</i><span>Resultados</span></button>
+      </div>
+      <div className="command-separator" />
+      <div className="command-group command-process-group">
+        <span className="command-group-label">PROCESSAMENTO</span>
+        <button type="button" className="command command-calculate" onClick={() => void calculate(editorInput)} disabled={!activeProject || busy}><i aria-hidden="true">▶</i><span>{busy ? "Processando…" : "Processar modelo"}</span></button>
+      </div>
+      <div className="model-indicators" aria-label="Estado do modelo">
+        <span><i className={activeProject ? "indicator-ready" : "indicator-idle"} />{activeProject ? "Modelo ativo" : "Nenhum modelo"}</span>
+        <span>{result ? `${checkCount} verificações` : "Aguardando cálculo"}</span>
+        <span className="unit-system">UNIDADES: mm · kN · MPa</span>
+      </div>
+    </div>
     {localMode && <div className="local-banner"><strong>MODO LOCAL</strong> — configure as variáveis do Supabase para autenticação, RLS e sincronização em nuvem.</div>}
     <div className={activeProject ? "workspace with-props" : "workspace"}>
       <aside className="navigator">
         <ProjectSidebar projects={projects} activeProjectId={activeProject?.id ?? null} onSelect={(project) => void selectProject(project)} onCreate={createProject} onArchive={archiveProject} />
+        {activeProject && <WorkspaceNavigator
+          activeModule={workspaceModule}
+          depthZoneCount={depthZoneCount}
+          soilLayerCount={soilLayerCount}
+          revisionNumber={activeRevision?.revisionNumber ?? null}
+          checkCount={checkCount}
+          drawingsAvailable={activeRevision !== null}
+          resultsAvailable={result !== null}
+          onOpenModule={setWorkspaceModule}
+        />}
         {activeProject && <RevisionHistory project={activeProject} revisions={revisions} onOpen={openRevision} />}
       </aside>
       <main className="main-content">
@@ -285,30 +328,39 @@ export function App() {
           <p>Crie ou selecione um projeto no navegador à esquerda para carregar o modelo estrutural, geotécnico, normativo e as revisões imutáveis.</p>
           <div className="welcome-features"><span>Motor determinístico</span><span>CAD 2D calibrado</span><span>SPT por camadas</span><span>Histórico SHA-256</span></div>
         </div></section> : <>
-          <section className="project-header"><div><h1>{activeProject.name}</h1><p>{activeProject.location || "Local não informado"}</p></div><span className="project-state">{activeProject.status === "calculated" ? "Calculado" : "Rascunho"}</span></section>
+          <section className="project-header"><div className="project-path"><span>PROJETO</span><b>/</b><strong>{activeProject.name}</strong><b>/</b><span>{moduleTitle.toUpperCase()}</span><small>{activeProject.location || "Local não informado"}</small></div><span className="project-state">{activeProject.status === "calculated" ? "Modelo calculado" : "Modelo em edição"}</span></section>
           {cadDraftConflict && <div className="error-banner" role="alert">
             <strong>Rascunho CAD baseado em revisão anterior encontrado.</strong>
             <p>A revisão mais nova foi mantida. Restaure o rascunho somente para reaproveitar conscientemente aquela geometria.</p>
             <div><button type="button" className="secondary" onClick={restoreCadConflict}>Restaurar rascunho antigo</button> <button type="button" className="text-button" onClick={discardCadConflict}>Descartar cópia antiga</button></div>
           </div>}
           {viewingHistorical && <div className="local-banner"><strong>REVISÃO HISTÓRICA</strong> — resultados e prancha correspondem à R{activeRevision!.revisionNumber}; o CAD e o formulário continuam mostrando o rascunho atual e não serão sobrescritos.</div>}
-          <CadGeometryPanel
-            key={activeProject.id}
-            ownerId={user.id}
-            projectId={activeProject.id}
-            projectName={activeProject.name}
-            document={editorInput.cadGeometry ?? EMPTY_CAD}
-            zones={editorInput.geometry.depthZones ?? []}
-            baseRevisionId={latestRevision?.id ?? null}
-            baseInputHash={latestRevision?.inputHash ?? null}
-            onChange={updateCadGeometry}
-            onApplyEnvelope={applyCadEnvelope}
-          />
-          {activeRevision && <DrawingPanel project={activeProject} revision={activeRevision} />}
-          {result && <ResultDashboard result={result} />}
-          {result && isIntegratedDesignResult(result) && <GeotechnicalPanel result={result} />}
-          {result && !isIntegratedDesignResult(result) && <section className="results-panel"><div className="warning-box"><strong>Revisão histórica</strong><p>Esta revisão foi calculada antes da integração geotécnica e normativa. Os dados antigos foram preservados; o rascunho atual não foi alterado.</p></div></section>}
-          {result?.masonry && <MasonryPanel masonry={result.masonry} />}
+          <div className="workspace-tabs" role="tablist" aria-label="Módulos do projeto">
+            <button type="button" role="tab" aria-selected={workspaceModule === "model"} className={workspaceModule === "model" ? "active" : ""} onClick={() => setWorkspaceModule("model")}><span>01</span> Modelo 2D</button>
+            <button type="button" role="tab" aria-selected={workspaceModule === "drawings"} className={workspaceModule === "drawings" ? "active" : ""} onClick={() => setWorkspaceModule("drawings")} disabled={!activeRevision}><span>02</span> Pranchas</button>
+            <button type="button" role="tab" aria-selected={workspaceModule === "results"} className={workspaceModule === "results" ? "active" : ""} onClick={() => setWorkspaceModule("results")} disabled={!result}><span>03</span> Resultados <b>{checkCount || "—"}</b></button>
+          </div>
+          <div className={`engineering-viewport module-${workspaceModule}`}>
+            {workspaceModule === "model" && <CadGeometryPanel
+              key={activeProject.id}
+              ownerId={user.id}
+              projectId={activeProject.id}
+              projectName={activeProject.name}
+              document={editorInput.cadGeometry ?? EMPTY_CAD}
+              zones={editorInput.geometry.depthZones ?? []}
+              baseRevisionId={latestRevision?.id ?? null}
+              baseInputHash={latestRevision?.inputHash ?? null}
+              onChange={updateCadGeometry}
+              onApplyEnvelope={applyCadEnvelope}
+            />}
+            {workspaceModule === "drawings" && activeRevision && <DrawingPanel project={activeProject} revision={activeRevision} />}
+            {workspaceModule === "results" && result && <>
+              <ResultDashboard result={result} />
+              {isIntegratedDesignResult(result) && <GeotechnicalPanel result={result} />}
+              {!isIntegratedDesignResult(result) && <section className="results-panel"><div className="warning-box"><strong>Revisão histórica</strong><p>Esta revisão foi calculada antes da integração geotécnica e normativa. Os dados antigos foram preservados; o rascunho atual não foi alterado.</p></div></section>}
+              {result.masonry && <MasonryPanel masonry={result.masonry} />}
+            </>}
+          </div>
         </>}
       </main>
       {activeProject && <aside className="props-panel"><CalculationEditor initialInput={editorInput} busy={busy} onInputChange={syncEditorInput} onCalculate={calculate} /></aside>}
